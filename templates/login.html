@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3 Strands Cattle Co. | Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-gold: #d4a853;
+            --primary-amber: #f4a460;
+            --dark-earth: #1a1209;
+            --rich-brown: #2d1f0f;
+            --accent-copper: #b87333;
+            --text-light: #e8d5b7;
+            --glow-gold: rgba(212, 168, 83, 0.8);
+            --neon-green: #39ff14;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--dark-earth);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated Background Grid */
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(212, 168, 83, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(212, 168, 83, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            z-index: 0;
+        }
+
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+        }
+
+        /* Floating Particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--primary-gold);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float 15s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.5; }
+            90% { opacity: 0.5; }
+            100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* Scanline Effect */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, var(--primary-gold), transparent);
+            opacity: 0.1;
+            animation: scan 8s linear infinite;
+            z-index: 2;
+        }
+
+        @keyframes scan {
+            0% { top: -4px; }
+            100% { top: 100%; }
+        }
+
+        /* Rope Border Animation */
+        .rope-border {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            border: 2px solid transparent;
+            border-image: repeating-linear-gradient(
+                45deg,
+                var(--primary-gold),
+                var(--primary-gold) 10px,
+                var(--accent-copper) 10px,
+                var(--accent-copper) 20px
+            ) 1;
+            opacity: 0.3;
+            z-index: 1;
+            animation: ropeGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes ropeGlow {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Login Container */
+        .login-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 480px;
+            padding: 40px;
+        }
+
+        .login-box {
+            background: linear-gradient(145deg, rgba(45, 31, 15, 0.95), rgba(26, 18, 9, 0.98));
+            border: 1px solid var(--primary-gold);
+            border-radius: 4px;
+            padding: 50px 40px;
+            position: relative;
+            box-shadow:
+                0 0 40px rgba(212, 168, 83, 0.2),
+                inset 0 0 60px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        /* Corner Accents */
+        .corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--primary-gold);
+        }
+
+        .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+        .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+        .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+        .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+        /* Brand Section */
+        .brand-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .logo-icon {
+            font-size: 80px;
+            color: var(--primary-gold);
+            text-shadow: 0 0 30px var(--glow-gold);
+            animation: logoPulse 3s ease-in-out infinite;
+            display: block;
+        }
+
+        @keyframes logoPulse {
+            0%, 100% {
+                text-shadow: 0 0 30px var(--glow-gold);
+                transform: scale(1);
+            }
+            50% {
+                text-shadow: 0 0 50px var(--glow-gold), 0 0 80px rgba(212, 168, 83, 0.5);
+                transform: scale(1.05);
+            }
+        }
+
+        /* Three Strands Symbol */
+        .strands-symbol {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .strand {
+            width: 4px;
+            height: 60px;
+            background: linear-gradient(180deg, var(--primary-gold), var(--accent-copper));
+            border-radius: 2px;
+            animation: strandWave 2s ease-in-out infinite;
+        }
+
+        .strand:nth-child(1) { animation-delay: 0s; }
+        .strand:nth-child(2) { animation-delay: 0.3s; }
+        .strand:nth-child(3) { animation-delay: 0.6s; }
+
+        @keyframes strandWave {
+            0%, 100% { transform: scaleY(1) rotate(-5deg); }
+            50% { transform: scaleY(1.2) rotate(5deg); }
+        }
+
+        .brand-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary-gold);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px var(--glow-gold);
+            margin-bottom: 5px;
+        }
+
+        .brand-tagline {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 14px;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            opacity: 0.7;
+        }
+
+        .system-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            color: var(--neon-green);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-top: 15px;
+            animation: systemBlink 2s ease-in-out infinite;
+        }
+
+        @keyframes systemBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Form Styling */
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .form-label {
+            display: block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            color: var(--primary-gold);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(212, 168, 83, 0.3);
+            border-radius: 2px;
+            color: var(--text-light);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-gold);
+            box-shadow: 0 0 20px rgba(212, 168, 83, 0.3), inset 0 0 20px rgba(212, 168, 83, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: rgba(232, 213, 183, 0.3);
+        }
+
+        /* Submit Button */
+        .submit-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, var(--primary-gold), var(--accent-copper));
+            border: none;
+            border-radius: 2px;
+            color: var(--dark-earth);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(212, 168, 83, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: btnShine 3s ease-in-out infinite;
+        }
+
+        @keyframes btnShine {
+            0% { left: -100%; }
+            50%, 100% { left: 100%; }
+        }
+
+        /* Error Message */
+        .error-message {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+            padding: 12px;
+            border-radius: 2px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: errorShake 0.5s ease;
+        }
+
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        /* Footer Notice */
+        .security-notice {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(212, 168, 83, 0.2);
+        }
+
+        .security-notice p {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            color: var(--primary-gold);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.6;
+        }
+
+        /* Loading State */
+        .loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .loading .submit-btn {
+            background: rgba(212, 168, 83, 0.5);
+        }
+
+        .loading .submit-btn::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--dark-earth);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Status Indicator */
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--neon-green);
+            border-radius: 50%;
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { box-shadow: 0 0 5px var(--neon-green); }
+            50% { box-shadow: 0 0 15px var(--neon-green), 0 0 30px var(--neon-green); }
+        }
+
+        .status-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 9px;
+            color: var(--neon-green);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Responsive */
+        @media (max-width: 520px) {
+            .login-container {
+                padding: 20px;
+            }
+
+            .login-box {
+                padding: 40px 25px;
+            }
+
+            .brand-name {
+                font-size: 22px;
+                letter-spacing: 2px;
+            }
+
+            .brand-tagline {
+                font-size: 12px;
+                letter-spacing: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="bg-grid"></div>
+    <div class="scanline"></div>
+    <div class="rope-border"></div>
+
+    <!-- Particles -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Login Container -->
+    <div class="login-container">
+        <div class="login-box">
+            <!-- Corner Accents -->
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+
+            <!-- Status Indicator -->
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span class="status-text">System Online</span>
+            </div>
+
+            <!-- Brand Section -->
+            <div class="brand-section">
+                <div class="logo-container">
+                    <div class="strands-symbol">
+                        <div class="strand"></div>
+                        <div class="strand"></div>
+                        <div class="strand"></div>
+                    </div>
+                </div>
+                <h1 class="brand-name">3 Strands</h1>
+                <p class="brand-tagline">Cattle Company</p>
+                <p class="system-name">Ranch Command Center</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm">
+                <div class="error-message" id="errorMessage"></div>
+
+                <div class="form-group">
+                    <label class="form-label" for="username">Operator ID</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        class="form-input"
+                        placeholder="Enter your username"
+                        autocomplete="username"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Access Code</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="form-input"
+                        placeholder="Enter your password"
+                        autocomplete="current-password"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    Authenticate
+                </button>
+            </form>
+
+            <!-- Security Notice -->
+            <div class="security-notice">
+                <p>Authorized Personnel Only</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Create floating particles
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 30; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        createParticles();
+
+        // Login form handler
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const form = this;
+            const errorMessage = document.getElementById('errorMessage');
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Clear previous error
+            errorMessage.classList.remove('show');
+            errorMessage.textContent = '';
+
+            // Add loading state
+            form.classList.add('loading');
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Success animation then redirect
+                    document.querySelector('.login-box').style.animation = 'successPulse 0.5s ease';
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 500);
+                } else {
+                    // Show error
+                    errorMessage.textContent = data.error || 'Authentication failed';
+                    errorMessage.classList.add('show');
+                    form.classList.remove('loading');
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Connection error. Please try again.';
+                errorMessage.classList.add('show');
+                form.classList.remove('loading');
+            }
+        });
+
+        // Add success animation keyframes
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes successPulse {
+                0% { box-shadow: 0 0 40px rgba(212, 168, 83, 0.2); }
+                50% { box-shadow: 0 0 80px rgba(57, 255, 20, 0.5); border-color: #39ff14; }
+                100% { box-shadow: 0 0 40px rgba(212, 168, 83, 0.2); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
