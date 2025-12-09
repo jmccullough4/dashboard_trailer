@@ -1185,3 +1185,145 @@ select.form-input {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-gold);
 }
+
+/* =============================================================================
+   Sensor Detail Modal & Charts
+   ============================================================================= */
+
+.modal-large {
+    max-width: 900px;
+}
+
+.sensor-detail-content {
+    padding: 25px;
+}
+
+.sensor-current-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.stat-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 168, 83, 0.2);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    border-color: var(--primary-gold);
+    box-shadow: 0 5px 20px rgba(212, 168, 83, 0.15);
+}
+
+.stat-icon {
+    font-size: 24px;
+    color: var(--primary-gold);
+    margin-bottom: 10px;
+}
+
+.stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--neon-blue);
+    text-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.chart-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    color: var(--primary-gold);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.chart-controls .btn.active {
+    background: var(--primary-gold);
+    color: var(--dark-earth);
+}
+
+.chart-container {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 168, 83, 0.15);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    height: 250px;
+}
+
+.history-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 15px;
+    background: rgba(212, 168, 83, 0.1);
+    border: 1px solid rgba(212, 168, 83, 0.2);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.history-note i {
+    color: var(--primary-gold);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* Make sensor cards clickable */
+.sensor-card {
+    cursor: pointer;
+}
+
+.sensor-card:hover .sensor-name {
+    color: var(--primary-gold);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sensor-current-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .modal-large {
+        max-width: 100%;
+    }
+
+    .stat-value {
+        font-size: 22px;
+    }
+
+    .chart-container {
+        height: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .sensor-current-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

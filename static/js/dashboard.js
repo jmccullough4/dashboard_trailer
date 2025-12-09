@@ -5,6 +5,10 @@
 // Global state
 let allUsers = [];
 let allTasks = [];
+let allSensors = [];
+let currentSensor = null;
+let temperatureChart = null;
+let humidityChart = null;
 
 // =============================================================================
 // Initialization
@@ -275,7 +279,8 @@ async function loadSensors() {
         }
 
         if (data.data && data.data.devices && data.data.devices.length > 0) {
-            renderSensors(data.data.devices);
+            allSensors = data.data.devices;
+            renderSensors(allSensors);
         } else {
             grid.innerHTML = `
                 <div class="no-sensors">
@@ -301,46 +306,30 @@ function renderSensors(devices) {
     grid.innerHTML = '';
 
     devices.forEach(device => {
+        const state = device.state || {};
+        const isOnline = device.online !== false;
+
         const card = document.createElement('div');
         card.className = 'sensor-card';
+        card.onclick = () => showSensorModal(device.deviceId);
+
         card.innerHTML = `
             <div class="sensor-header">
                 <div class="sensor-icon">
                     <i class="fas ${getSensorIcon(device.type)}"></i>
                 </div>
-                <span class="sensor-status ${device.state?.online ? 'online' : 'offline'}">
-                    ${device.state?.online ? 'Online' : 'Offline'}
+                <span class="sensor-status ${isOnline ? 'online' : 'offline'}">
+                    ${isOnline ? 'Online' : 'Offline'}
                 </span>
             </div>
             <h4 class="sensor-name">${device.name || 'Unknown Sensor'}</h4>
             <p class="sensor-type">${device.type || 'Unknown Type'}</p>
-            <div class="sensor-readings" id="readings-${device.deviceId}">
-                <div class="reading">
-                    <span class="reading-value">--</span>
-                    <span class="reading-label">Loading...</span>
-                </div>
+            <div class="sensor-readings">
+                ${formatSensorReadings(state, device.type)}
             </div>
         `;
         grid.appendChild(card);
-
-        // Load device state
-        loadDeviceState(device.deviceId, device.type);
     });
-}
-
-async function loadDeviceState(deviceId, deviceType) {
-    try {
-        const response = await fetch(`/api/yolink/device/${deviceId}/state?type=${deviceType}`);
-        const data = await response.json();
-
-        const readingsEl = document.getElementById(`readings-${deviceId}`);
-        if (readingsEl && data.data && data.data.state) {
-            const state = data.data.state;
-            readingsEl.innerHTML = formatSensorReadings(state, deviceType);
-        }
-    } catch (error) {
-        console.error(`Error loading state for ${deviceId}:`, error);
-    }
 }
 
 function getSensorIcon(type) {
@@ -866,3 +855,272 @@ document.addEventListener('DOMContentLoaded', function() {
         adminNav.addEventListener('click', loadAdminUsers);
     }
 });
+
+// =============================================================================
+// Sensor Detail Modal & Charts
+// =============================================================================
+
+function showSensorModal(deviceId) {
+    const device = allSensors.find(d => d.deviceId === deviceId);
+    if (!device) return;
+
+    currentSensor = device;
+    const modal = document.getElementById('sensorModal');
+    const title = document.getElementById('sensorModalTitle');
+    const state = device.state || {};
+
+    title.textContent = device.name || 'Sensor Details';
+
+    // Update current stats
+    if (state.temperature !== undefined) {
+        const tempF = (state.temperature * 9/5) + 32;
+        document.getElementById('currentTemp').textContent = `${tempF.toFixed(1)}°F`;
+    } else {
+        document.getElementById('currentTemp').textContent = '--';
+    }
+
+    if (state.humidity !== undefined) {
+        document.getElementById('currentHumidity').textContent = `${state.humidity}%`;
+    } else {
+        document.getElementById('currentHumidity').textContent = '--';
+    }
+
+    if (state.battery !== undefined) {
+        document.getElementById('currentBattery').textContent = `${state.battery}%`;
+    } else {
+        document.getElementById('currentBattery').textContent = '--';
+    }
+
+    const signal = state.loraInfo?.signal;
+    if (signal !== undefined) {
+        document.getElementById('currentSignal').textContent = `${signal} dBm`;
+    } else {
+        document.getElementById('currentSignal').textContent = '--';
+    }
+
+    modal.classList.add('show');
+
+    // Load history with default 24 hours
+    loadSensorHistory(24);
+}
+
+function closeSensorModal() {
+    document.getElementById('sensorModal').classList.remove('show');
+    currentSensor = null;
+
+    // Destroy charts
+    if (temperatureChart) {
+        temperatureChart.destroy();
+        temperatureChart = null;
+    }
+    if (humidityChart) {
+        humidityChart.destroy();
+        humidityChart = null;
+    }
+}
+
+async function loadSensorHistory(hours) {
+    if (!currentSensor) return;
+
+    // Update active button
+    document.querySelectorAll('.chart-controls .btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.includes(hours === 6 ? '6 Hours' :
+            hours === 24 ? '24 Hours' :
+            hours === 72 ? '3 Days' : '1 Week')) {
+            btn.classList.add('active');
+        }
+    });
+
+    try {
+        const response = await fetch(`/api/yolink/device/${currentSensor.deviceId}/history?hours=${hours}`);
+        const data = await response.json();
+
+        renderCharts(data.readings);
+    } catch (error) {
+        console.error('Error loading sensor history:', error);
+        showToast('Failed to load sensor history', 'error');
+    }
+}
+
+function renderCharts(readings) {
+    // Destroy existing charts
+    if (temperatureChart) {
+        temperatureChart.destroy();
+    }
+    if (humidityChart) {
+        humidityChart.destroy();
+    }
+
+    if (!readings || readings.length === 0) {
+        // Show no data message
+        const tempCtx = document.getElementById('temperatureChart').getContext('2d');
+        const humCtx = document.getElementById('humidityChart').getContext('2d');
+
+        temperatureChart = new Chart(tempCtx, {
+            type: 'line',
+            data: { datasets: [] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'No temperature data available. Refresh sensors to start recording.',
+                        color: '#8b7355'
+                    }
+                }
+            }
+        });
+
+        humidityChart = new Chart(humCtx, {
+            type: 'line',
+            data: { datasets: [] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'No humidity data available. Refresh sensors to start recording.',
+                        color: '#8b7355'
+                    }
+                }
+            }
+        });
+        return;
+    }
+
+    // Prepare data
+    const labels = readings.map(r => new Date(r.recorded_at));
+    const tempData = readings.map(r => r.temperature !== null ? (r.temperature * 9/5) + 32 : null);
+    const humData = readings.map(r => r.humidity);
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false
+        },
+        scales: {
+            x: {
+                type: 'time',
+                time: {
+                    displayFormats: {
+                        hour: 'MMM d, h:mm a',
+                        day: 'MMM d'
+                    }
+                },
+                grid: {
+                    color: 'rgba(212, 168, 83, 0.1)'
+                },
+                ticks: {
+                    color: '#8b7355'
+                }
+            },
+            y: {
+                grid: {
+                    color: 'rgba(212, 168, 83, 0.1)'
+                },
+                ticks: {
+                    color: '#8b7355'
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                labels: {
+                    color: '#e8d5b7'
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(26, 18, 9, 0.95)',
+                borderColor: '#d4a853',
+                borderWidth: 1,
+                titleColor: '#d4a853',
+                bodyColor: '#e8d5b7'
+            }
+        }
+    };
+
+    // Temperature Chart
+    const tempCtx = document.getElementById('temperatureChart').getContext('2d');
+    temperatureChart = new Chart(tempCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Temperature (°F)',
+                data: tempData,
+                borderColor: '#ff6b6b',
+                backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#ff6b6b'
+            }]
+        },
+        options: {
+            ...chartOptions,
+            plugins: {
+                ...chartOptions.plugins,
+                title: {
+                    display: true,
+                    text: 'Temperature History',
+                    color: '#d4a853',
+                    font: {
+                        family: 'Orbitron',
+                        size: 14
+                    }
+                }
+            }
+        }
+    });
+
+    // Humidity Chart
+    const humCtx = document.getElementById('humidityChart').getContext('2d');
+    humidityChart = new Chart(humCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Humidity (%)',
+                data: humData,
+                borderColor: '#00d4ff',
+                backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#00d4ff'
+            }]
+        },
+        options: {
+            ...chartOptions,
+            plugins: {
+                ...chartOptions.plugins,
+                title: {
+                    display: true,
+                    text: 'Humidity History',
+                    color: '#d4a853',
+                    font: {
+                        family: 'Orbitron',
+                        size: 14
+                    }
+                }
+            },
+            scales: {
+                ...chartOptions.scales,
+                y: {
+                    ...chartOptions.scales.y,
+                    min: 0,
+                    max: 100
+                }
+            }
+        }
+    });
+}
