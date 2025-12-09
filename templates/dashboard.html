@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3 Strands Cattle Co. | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="bg-grid"></div>
+    <div class="scanline"></div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="strands-mini">
+                    <span></span><span></span><span></span>
+                </div>
+                <div class="brand-text">
+                    <h1>3 Strands</h1>
+                    <p>Cattle Co.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-menu">
+            <a href="#" class="nav-item active" data-section="sensors">
+                <i class="fas fa-satellite-dish"></i>
+                <span>Sensors</span>
+            </a>
+            <a href="#" class="nav-item" data-section="tasks">
+                <i class="fas fa-tasks"></i>
+                <span>Tasks</span>
+            </a>
+            <a href="#" class="nav-item" data-section="files">
+                <i class="fas fa-folder"></i>
+                <span>Files</span>
+            </a>
+            {% if user.is_admin %}
+            <a href="#" class="nav-item" data-section="admin">
+                <i class="fas fa-users-cog"></i>
+                <span>Admin</span>
+            </a>
+            <a href="#" class="nav-item" data-section="settings">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-details">
+                    <span class="user-name">{{ user.username }}</span>
+                    <span class="user-role">{% if user.is_admin %}Administrator{% else %}Operator{% endif %}</span>
+                </div>
+            </div>
+            <a href="/logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="page-title">
+                <h2 id="pageTitle">Sensor Dashboard</h2>
+                <span class="status-online"><i class="fas fa-circle"></i> System Online</span>
+            </div>
+            <div class="top-actions">
+                <span class="datetime" id="datetime"></span>
+            </div>
+        </header>
+
+        <!-- Content Sections -->
+        <div class="content-wrapper">
+            <!-- Sensors Section -->
+            <section class="section active" id="sensors-section">
+                <div class="section-header">
+                    <h3>YoLink Sensors</h3>
+                    <button class="btn btn-primary" onclick="refreshSensors()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="sensors-grid" id="sensorsGrid">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading sensors...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tasks Section (Trello-like) -->
+            <section class="section" id="tasks-section">
+                <div class="section-header">
+                    <h3>Task Board</h3>
+                    <button class="btn btn-primary" onclick="showTaskModal()">
+                        <i class="fas fa-plus"></i> New Task
+                    </button>
+                </div>
+                <div class="kanban-board" id="kanbanBoard">
+                    <div class="kanban-column" data-status="assigned">
+                        <div class="column-header">
+                            <h4><i class="fas fa-clipboard-list"></i> Assigned</h4>
+                            <span class="task-count" id="count-assigned">0</span>
+                        </div>
+                        <div class="task-list" id="tasks-assigned"></div>
+                    </div>
+                    <div class="kanban-column" data-status="in_progress">
+                        <div class="column-header">
+                            <h4><i class="fas fa-spinner"></i> In Progress</h4>
+                            <span class="task-count" id="count-in_progress">0</span>
+                        </div>
+                        <div class="task-list" id="tasks-in_progress"></div>
+                    </div>
+                    <div class="kanban-column" data-status="review">
+                        <div class="column-header">
+                            <h4><i class="fas fa-search"></i> Review</h4>
+                            <span class="task-count" id="count-review">0</span>
+                        </div>
+                        <div class="task-list" id="tasks-review"></div>
+                    </div>
+                    <div class="kanban-column" data-status="complete">
+                        <div class="column-header">
+                            <h4><i class="fas fa-check-circle"></i> Complete</h4>
+                            <span class="task-count" id="count-complete">0</span>
+                        </div>
+                        <div class="task-list" id="tasks-complete"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Files Section -->
+            <section class="section" id="files-section">
+                <div class="section-header">
+                    <h3>File Manager</h3>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-upload"></i> Upload File
+                    </button>
+                    <input type="file" id="fileInput" style="display:none" onchange="uploadFile(this)">
+                </div>
+                <div class="files-container">
+                    <div class="file-category">
+                        <h4><i class="fas fa-user"></i> My Files</h4>
+                        <div class="file-grid" id="myFiles"></div>
+                    </div>
+                    <div class="file-category">
+                        <h4><i class="fas fa-share-alt"></i> Shared With Me</h4>
+                        <div class="file-grid" id="sharedFiles"></div>
+                    </div>
+                    <div class="file-category">
+                        <h4><i class="fas fa-globe"></i> Public Files</h4>
+                        <div class="file-grid" id="publicFiles"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Section -->
+            {% if user.is_admin %}
+            <section class="section" id="admin-section">
+                <div class="section-header">
+                    <h3>User Management</h3>
+                    <button class="btn btn-primary" onclick="showRegisterModal()">
+                        <i class="fas fa-user-plus"></i> Add User
+                    </button>
+                </div>
+                <div class="admin-table-container">
+                    <table class="admin-table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="section" id="settings-section">
+                <div class="section-header">
+                    <h3>YoLink Configuration</h3>
+                </div>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label class="form-label">UAID</label>
+                        <input type="text" id="yolinkUaid" class="form-input" placeholder="Enter your YoLink UAID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Secret Key</label>
+                        <input type="password" id="yolinkSecret" class="form-input" placeholder="Enter your YoLink Secret Key">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveYoLinkConfig()">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                    <p class="config-status" id="configStatus"></p>
+                </div>
+            </section>
+            {% endif %}
+        </div>
+    </main>
+
+    <!-- Task Modal -->
+    <div class="modal" id="taskModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="taskModalTitle">New Task</h3>
+                <button class="modal-close" onclick="closeTaskModal()">&times;</button>
+            </div>
+            <form id="taskForm">
+                <input type="hidden" id="taskId">
+                <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" id="taskTitle" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea id="taskDescription" class="form-input" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Priority</label>
+                        <select id="taskPriority" class="form-input">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Assign To</label>
+                        <select id="taskAssignee" class="form-input">
+                            <option value="">Unassigned</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Due Date</label>
+                    <input type="datetime-local" id="taskDueDate" class="form-input">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New User</h3>
+                <button class="modal-close" onclick="closeRegisterModal()">&times;</button>
+            </div>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" id="newUsername" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="newPassword" class="form-input" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeRegisterModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div class="modal" id="shareModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Share File</h3>
+                <button class="modal-close" onclick="closeShareModal()">&times;</button>
+            </div>
+            <form id="shareForm">
+                <input type="hidden" id="shareFileId">
+                <div class="form-group">
+                    <label class="form-label">Share with users</label>
+                    <div id="shareUsersList" class="checkbox-list"></div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="sharePublic">
+                        <span>Make Public</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeShareModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Sharing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        // Initialize with current user info
+        const currentUser = {
+            id: {{ user.id }},
+            username: '{{ user.username }}',
+            isAdmin: {{ 'true' if user.is_admin else 'false' }}
+        };
+    </script>
+</body>
+</html>
