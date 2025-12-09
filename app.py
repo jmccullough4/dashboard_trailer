@@ -143,6 +143,36 @@ class YoLinkConfig(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SensorReading(db.Model):
+    """Store sensor readings locally for history charts"""
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.String(100), nullable=False, index=True)
+    device_name = db.Column(db.String(255))
+    device_type = db.Column(db.String(50))
+    temperature = db.Column(db.Float)
+    humidity = db.Column(db.Float)
+    battery = db.Column(db.Integer)
+    signal = db.Column(db.Integer)
+    state = db.Column(db.String(50))
+    online = db.Column(db.Boolean, default=True)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'device_id': self.device_id,
+            'device_name': self.device_name,
+            'device_type': self.device_type,
+            'temperature': self.temperature,
+            'humidity': self.humidity,
+            'battery': self.battery,
+            'signal': self.signal,
+            'state': self.state,
+            'online': self.online,
+            'recorded_at': self.recorded_at.isoformat() if self.recorded_at else None
+        }
+
+
 # =============================================================================
 # User Loader
 # =============================================================================
@@ -201,7 +231,7 @@ class YoLinkAPI:
         return None
 
     @staticmethod
-    def api_request(method, params=None):
+    def api_request(method, params=None, target_device=None):
         token = YoLinkAPI.get_access_token()
         if not token:
             return {'error': 'YoLink not configured or authentication failed'}
@@ -211,8 +241,10 @@ class YoLinkAPI:
                 'method': method,
                 'time': int(time.time() * 1000)
             }
+            if target_device:
+                payload['targetDevice'] = target_device
             if params:
-                payload.update(params)
+                payload['params'] = params
 
             response = requests.post(
                 YoLinkAPI.BASE_URL,
@@ -237,10 +269,13 @@ class YoLinkAPI:
         return YoLinkAPI.api_request('Home.getDeviceList')
 
     @staticmethod
-    def get_device_state(device_id, device_type):
-        return YoLinkAPI.api_request(f'{device_type}.getState', {
-            'targetDevice': device_id
-        })
+    def get_device_state(device_id, device_token, device_type):
+        """Get device state with proper targetDevice format"""
+        target_device = {
+            'deviceId': device_id,
+            'token': device_token
+        }
+        return YoLinkAPI.api_request(f'{device_type}.getState', target_device=target_device)
 
 
 # =============================================================================
@@ -621,8 +656,80 @@ def set_yolink_config():
 @app.route('/api/yolink/devices', methods=['GET'])
 @login_required
 def get_yolink_devices():
+    """Get all devices with their current state"""
     result = YoLinkAPI.get_device_list()
+
+    if 'error' in result:
+        return jsonify(result)
+
+    # Process devices and fetch their states
+    if result.get('data') and result['data'].get('devices'):
+        devices = result['data']['devices']
+        enhanced_devices = []
+
+        for device in devices:
+            device_id = device.get('deviceId')
+            device_token = device.get('token')
+            device_type = device.get('type', 'THSensor')
+            device_name = device.get('name', 'Unknown')
+
+            # Fetch current state for each device
+            state_result = YoLinkAPI.get_device_state(device_id, device_token, device_type)
+
+            device_info = {
+                'deviceId': device_id,
+                'token': device_token,
+                'name': device_name,
+                'type': device_type,
+                'modelName': device.get('modelName'),
+                'online': False,
+                'state': {}
+            }
+
+            # Extract state data
+            if state_result.get('data') and state_result['data'].get('state'):
+                state = state_result['data']['state']
+                device_info['state'] = state
+                device_info['online'] = state.get('online', True)  # Default to true if not specified
+
+                # Store reading in database for history
+                store_sensor_reading(device_id, device_name, device_type, state)
+
+            enhanced_devices.append(device_info)
+
+        result['data']['devices'] = enhanced_devices
+
     return jsonify(result)
+
+
+def store_sensor_reading(device_id, device_name, device_type, state):
+    """Store a sensor reading for history tracking"""
+    try:
+        # Check if we already have a recent reading (within 5 minutes)
+        recent = SensorReading.query.filter(
+            SensorReading.device_id == device_id,
+            SensorReading.recorded_at > datetime.utcnow() - timedelta(minutes=5)
+        ).first()
+
+        if recent:
+            return  # Skip if recent reading exists
+
+        reading = SensorReading(
+            device_id=device_id,
+            device_name=device_name,
+            device_type=device_type,
+            temperature=state.get('temperature'),
+            humidity=state.get('humidity'),
+            battery=state.get('battery'),
+            signal=state.get('loraInfo', {}).get('signal') if isinstance(state.get('loraInfo'), dict) else None,
+            state=state.get('state') or state.get('alertType'),
+            online=state.get('online', True)
+        )
+        db.session.add(reading)
+        db.session.commit()
+    except Exception as e:
+        print(f"Error storing sensor reading: {e}")
+        db.session.rollback()
 
 
 @app.route('/api/yolink/home', methods=['GET'])
@@ -634,10 +741,41 @@ def get_yolink_home():
 
 @app.route('/api/yolink/device/<device_id>/state', methods=['GET'])
 @login_required
-def get_device_state(device_id):
+def get_device_state_route(device_id):
+    device_token = request.args.get('token')
     device_type = request.args.get('type', 'THSensor')
-    result = YoLinkAPI.get_device_state(device_id, device_type)
+
+    if not device_token:
+        return jsonify({'error': 'Device token required'}), 400
+
+    result = YoLinkAPI.get_device_state(device_id, device_token, device_type)
     return jsonify(result)
+
+
+@app.route('/api/yolink/device/<device_id>/history', methods=['GET'])
+@login_required
+def get_device_history(device_id):
+    """Get historical readings for a device"""
+    hours = request.args.get('hours', 24, type=int)
+    limit = request.args.get('limit', 500, type=int)
+
+    # Cap at reasonable limits
+    hours = min(hours, 168)  # Max 1 week
+    limit = min(limit, 1000)
+
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    readings = SensorReading.query.filter(
+        SensorReading.device_id == device_id,
+        SensorReading.recorded_at > since
+    ).order_by(SensorReading.recorded_at.asc()).limit(limit).all()
+
+    return jsonify({
+        'device_id': device_id,
+        'hours': hours,
+        'count': len(readings),
+        'readings': [r.to_dict() for r in readings]
+    })
 
 
 # =============================================================================

@@ -7,6 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 <body>
     <!-- Background Effects -->
@@ -310,6 +312,61 @@
                     <button type="submit" class="btn btn-primary">Update Sharing</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Sensor Detail Modal -->
+    <div class="modal" id="sensorModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="sensorModalTitle">Sensor Details</h3>
+                <button class="modal-close" onclick="closeSensorModal()">&times;</button>
+            </div>
+            <div class="sensor-detail-content">
+                <div class="sensor-current-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-thermometer-half"></i></div>
+                        <div class="stat-value" id="currentTemp">--</div>
+                        <div class="stat-label">Temperature</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-tint"></i></div>
+                        <div class="stat-value" id="currentHumidity">--</div>
+                        <div class="stat-label">Humidity</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-battery-three-quarters"></i></div>
+                        <div class="stat-value" id="currentBattery">--</div>
+                        <div class="stat-label">Battery</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-signal"></i></div>
+                        <div class="stat-value" id="currentSignal">--</div>
+                        <div class="stat-label">Signal</div>
+                    </div>
+                </div>
+
+                <div class="chart-controls">
+                    <span class="chart-label">History Range:</span>
+                    <button class="btn btn-sm btn-secondary" onclick="loadSensorHistory(6)">6 Hours</button>
+                    <button class="btn btn-sm btn-secondary active" onclick="loadSensorHistory(24)">24 Hours</button>
+                    <button class="btn btn-sm btn-secondary" onclick="loadSensorHistory(72)">3 Days</button>
+                    <button class="btn btn-sm btn-secondary" onclick="loadSensorHistory(168)">1 Week</button>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="humidityChart"></canvas>
+                </div>
+
+                <div class="history-note">
+                    <i class="fas fa-info-circle"></i>
+                    <span>History is recorded each time sensors are refreshed. For inspection reports, refresh sensors regularly to build comprehensive data.</span>
+                </div>
+            </div>
         </div>
     </div>
 
