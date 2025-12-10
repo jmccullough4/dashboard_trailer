@@ -1467,8 +1467,12 @@ async function loadVersion() {
 
         const versionText = document.getElementById('versionText');
         if (versionText) {
-            versionText.textContent = data.version || 'v1.0.0';
-            versionText.title = `Branch: ${data.branch}\nCommit: ${data.commit}\nDate: ${data.date}`;
+            let versionDisplay = data.version || 'v1.0.0';
+            if (data.docker) {
+                versionDisplay += ' (Docker)';
+            }
+            versionText.textContent = versionDisplay;
+            versionText.title = `Branch: ${data.branch}\nCommit: ${data.commit}\nDate: ${data.date}${data.docker ? '\nRunning in Docker' : ''}`;
         }
     } catch (error) {
         console.error('Error loading version:', error);
@@ -1491,6 +1495,12 @@ async function checkForUpdates() {
 
         if (data.error) {
             showToast(data.error, 'error');
+            return;
+        }
+
+        // Handle Docker environment
+        if (data.docker) {
+            showToast(data.message || 'Running in Docker - rebuild container to update', 'info');
             return;
         }
 
