@@ -907,32 +907,48 @@ function showSensorModal(deviceId) {
 
     title.textContent = device.name || 'Sensor Details';
 
-    // Update current stats
+    // Get stat card elements
+    const tempCard = document.getElementById('currentTemp').closest('.stat-card');
+    const humidityCard = document.getElementById('currentHumidity').closest('.stat-card');
+    const batteryCard = document.getElementById('currentBattery').closest('.stat-card');
+    const signalCard = document.getElementById('currentSignal').closest('.stat-card');
+
+    // Update current stats - only show if data exists
     if (state.temperature !== undefined) {
-        const tempF = (state.temperature * 9/5) + 32;
+        // Check if sensor is in Fahrenheit mode
+        let tempF;
+        if (state.mode === 'f') {
+            tempF = state.temperature;
+        } else {
+            tempF = (state.temperature * 9/5) + 32;
+        }
         document.getElementById('currentTemp').textContent = `${tempF.toFixed(1)}°F`;
+        tempCard.style.display = '';
     } else {
-        document.getElementById('currentTemp').textContent = '--';
+        tempCard.style.display = 'none';
     }
 
-    if (state.humidity !== undefined) {
+    if (state.humidity !== undefined && state.humidity > 0) {
         document.getElementById('currentHumidity').textContent = `${state.humidity}%`;
+        humidityCard.style.display = '';
     } else {
-        document.getElementById('currentHumidity').textContent = '--';
+        humidityCard.style.display = 'none';
     }
 
     if (state.battery !== undefined) {
         const batteryPercent = convertBatteryLevel(state.battery);
         document.getElementById('currentBattery').textContent = `${batteryPercent}%`;
+        batteryCard.style.display = '';
     } else {
-        document.getElementById('currentBattery').textContent = '--';
+        batteryCard.style.display = 'none';
     }
 
     const signal = state.loraInfo?.signal;
     if (signal !== undefined) {
         document.getElementById('currentSignal').textContent = `${signal} dBm`;
+        signalCard.style.display = '';
     } else {
-        document.getElementById('currentSignal').textContent = '--';
+        signalCard.style.display = 'none';
     }
 
     modal.classList.add('show');
