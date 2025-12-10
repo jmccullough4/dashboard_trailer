@@ -1188,11 +1188,201 @@ def generate_fda_report():
 
 
 # =============================================================================
+# Version and Update Routes
+# =============================================================================
+
+import subprocess
+
+def get_git_version():
+    """Get current git commit info"""
+    try:
+        # Get short commit hash
+        commit_hash = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+
+        # Get commit date
+        commit_date = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%ci'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+
+        # Get branch name
+        branch = subprocess.check_output(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+
+        return {
+            'commit': commit_hash,
+            'date': commit_date,
+            'branch': branch,
+            'version': f"v1.0.0-{commit_hash}"
+        }
+    except Exception as e:
+        return {
+            'commit': 'unknown',
+            'date': 'unknown',
+            'branch': 'unknown',
+            'version': 'v1.0.0',
+            'error': str(e)
+        }
+
+
+@app.route('/api/version', methods=['GET'])
+@login_required
+def get_version():
+    """Get current application version"""
+    return jsonify(get_git_version())
+
+
+@app.route('/api/updates/check', methods=['GET'])
+@login_required
+def check_for_updates():
+    """Check if updates are available from GitHub"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Fetch latest from remote
+        subprocess.run(
+            ['git', 'fetch', 'origin'],
+            cwd=app_dir,
+            capture_output=True,
+            timeout=30
+        )
+
+        # Get current commit
+        current = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=app_dir
+        ).decode('utf-8').strip()
+
+        # Get current branch
+        branch = subprocess.check_output(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=app_dir
+        ).decode('utf-8').strip()
+
+        # Get remote commit
+        remote = subprocess.check_output(
+            ['git', 'rev-parse', f'origin/{branch}'],
+            cwd=app_dir
+        ).decode('utf-8').strip()
+
+        # Check if behind
+        behind_count = subprocess.check_output(
+            ['git', 'rev-list', '--count', f'HEAD..origin/{branch}'],
+            cwd=app_dir
+        ).decode('utf-8').strip()
+
+        # Get commit messages for pending updates
+        pending_commits = []
+        if int(behind_count) > 0:
+            log_output = subprocess.check_output(
+                ['git', 'log', '--oneline', f'HEAD..origin/{branch}'],
+                cwd=app_dir
+            ).decode('utf-8').strip()
+            pending_commits = log_output.split('\n') if log_output else []
+
+        return jsonify({
+            'update_available': current != remote,
+            'current_commit': current[:7],
+            'remote_commit': remote[:7],
+            'behind_count': int(behind_count),
+            'branch': branch,
+            'pending_commits': pending_commits
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Timeout checking for updates'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/updates/apply', methods=['POST'])
+@login_required
+def apply_update():
+    """Apply pending updates from GitHub"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Pull latest changes
+        result = subprocess.run(
+            ['git', 'pull', 'origin'],
+            cwd=app_dir,
+            capture_output=True,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'error': result.stderr.decode('utf-8')
+            }), 500
+
+        # Get new version info
+        new_version = get_git_version()
+
+        return jsonify({
+            'success': True,
+            'message': 'Update applied successfully',
+            'output': result.stdout.decode('utf-8'),
+            'new_version': new_version,
+            'restart_required': True
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Timeout applying update'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
 # Initialize Database
 # =============================================================================
 
+def migrate_db():
+    """Add missing columns to existing database"""
+    with app.app_context():
+        # Check and add missing columns to user table
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+
+        if 'user' in inspector.get_table_names():
+            existing_columns = [col['name'] for col in inspector.get_columns('user')]
+
+            columns_to_add = {
+                'email': 'VARCHAR(120)',
+                'first_name': 'VARCHAR(80)',
+                'last_name': 'VARCHAR(80)',
+                'phone': 'VARCHAR(20)'
+            }
+
+            for col_name, col_type in columns_to_add.items():
+                if col_name not in existing_columns:
+                    try:
+                        db.session.execute(text(f'ALTER TABLE user ADD COLUMN {col_name} {col_type}'))
+                        db.session.commit()
+                        print(f"Added column '{col_name}' to user table")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"Could not add column '{col_name}': {e}")
+
+
 def init_db():
     with app.app_context():
+        # Run migrations for existing databases FIRST
+        migrate_db()
+
+        # Then create any new tables
         db.create_all()
 
         # Create default admin user if not exists
