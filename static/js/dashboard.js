@@ -9,6 +9,13 @@ let allSensors = [];
 let currentSensor = null;
 let temperatureChart = null;
 let humidityChart = null;
+let autoRefreshInterval = null;
+let countdownInterval = null;
+let refreshCountdown = 60;
+const AUTO_REFRESH_SECONDS = 60;
+
+// Temperature unit preference (stored in localStorage)
+let useCelsius = localStorage.getItem('tempUnit') === 'C';
 
 // =============================================================================
 // Initialization
@@ -18,16 +25,66 @@ document.addEventListener('DOMContentLoaded', function() {
     initNavigation();
     initDateTime();
     initDragAndDrop();
+    initTempToggle();
     loadUsers();
     loadSensors();
     loadTasks();
     loadFiles();
+    startAutoRefresh();
 
     // Form handlers
     document.getElementById('taskForm').addEventListener('submit', handleTaskSubmit);
     document.getElementById('registerForm').addEventListener('submit', handleRegisterSubmit);
     document.getElementById('shareForm').addEventListener('submit', handleShareSubmit);
+    document.getElementById('editUserForm').addEventListener('submit', handleEditUserSubmit);
 });
+
+// Initialize temperature toggle from saved preference
+function initTempToggle() {
+    const toggle = document.getElementById('tempUnitToggle');
+    if (toggle) {
+        toggle.checked = useCelsius;
+    }
+}
+
+// Toggle temperature unit
+function toggleTempUnit() {
+    const toggle = document.getElementById('tempUnitToggle');
+    useCelsius = toggle.checked;
+    localStorage.setItem('tempUnit', useCelsius ? 'C' : 'F');
+    // Re-render sensors with new unit
+    if (allSensors.length > 0) {
+        renderSensors(allSensors);
+        renderNetworkDiagram(allSensors);
+    }
+}
+
+// Start auto-refresh
+function startAutoRefresh() {
+    refreshCountdown = AUTO_REFRESH_SECONDS;
+    updateCountdownDisplay();
+
+    // Clear existing intervals
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    // Countdown timer
+    countdownInterval = setInterval(() => {
+        refreshCountdown--;
+        updateCountdownDisplay();
+        if (refreshCountdown <= 0) {
+            refreshCountdown = AUTO_REFRESH_SECONDS;
+            loadSensors(true); // Silent refresh
+        }
+    }, 1000);
+}
+
+function updateCountdownDisplay() {
+    const el = document.getElementById('refreshCountdown');
+    if (el) {
+        el.textContent = refreshCountdown;
+    }
+}
 
 // =============================================================================
 // Navigation
@@ -156,8 +213,16 @@ function renderUsersTable(users) {
 
     users.forEach(user => {
         const row = document.createElement('tr');
+        const fullName = user.full_name || user.username;
+        const displayName = user.first_name || user.last_name
+            ? `${user.username} (${fullName})`
+            : user.username;
+
         row.innerHTML = `
-            <td>${user.username}</td>
+            <td>
+                <div>${displayName}</div>
+                ${user.email ? `<small style="color: var(--text-muted)">${user.email}</small>` : ''}
+            </td>
             <td>
                 <span class="role-badge ${user.is_admin ? 'admin' : 'user'}">
                     ${user.is_admin ? 'Admin' : 'User'}
@@ -166,6 +231,9 @@ function renderUsersTable(users) {
             <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}</td>
             <td>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</td>
             <td>
+                <button class="btn btn-sm btn-primary" onclick="showEditUserModal(${user.id})">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
                 ${user.id !== currentUser.id ? `
                     <button class="btn btn-sm btn-secondary" onclick="toggleUserAdmin(${user.id}, ${!user.is_admin})">
                         ${user.is_admin ? 'Remove Admin' : 'Make Admin'}
@@ -173,7 +241,7 @@ function renderUsersTable(users) {
                     <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">
                         Delete
                     </button>
-                ` : '<em style="color: var(--text-muted)">Current User</em>'}
+                ` : ''}
             </td>
         `;
         tbody.appendChild(row);
@@ -222,6 +290,10 @@ function showRegisterModal() {
     document.getElementById('registerModal').classList.add('show');
     document.getElementById('newUsername').value = '';
     document.getElementById('newPassword').value = '';
+    document.getElementById('newEmail').value = '';
+    document.getElementById('newFirstName').value = '';
+    document.getElementById('newLastName').value = '';
+    document.getElementById('newPhone').value = '';
 }
 
 function closeRegisterModal() {
@@ -233,12 +305,16 @@ async function handleRegisterSubmit(e) {
 
     const username = document.getElementById('newUsername').value;
     const password = document.getElementById('newPassword').value;
+    const email = document.getElementById('newEmail').value;
+    const first_name = document.getElementById('newFirstName').value;
+    const last_name = document.getElementById('newLastName').value;
+    const phone = document.getElementById('newPhone').value;
 
     try {
         const response = await fetch('/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password, email, first_name, last_name, phone })
         });
 
         const data = await response.json();
@@ -256,12 +332,94 @@ async function handleRegisterSubmit(e) {
     }
 }
 
+// Edit User Modal Functions
+async function showEditUserModal(userId) {
+    try {
+        const response = await fetch(`/api/users/${userId}`);
+        if (!response.ok) {
+            showToast('Failed to load user details', 'error');
+            return;
+        }
+
+        const user = await response.json();
+
+        // Populate the form
+        document.getElementById('editUserId').value = user.id;
+        document.getElementById('editUsername').value = user.username || '';
+        document.getElementById('editFirstName').value = user.first_name || '';
+        document.getElementById('editLastName').value = user.last_name || '';
+        document.getElementById('editEmail').value = user.email || '';
+        document.getElementById('editPhone').value = user.phone || '';
+        document.getElementById('editPassword').value = '';
+
+        // Show the modal
+        document.getElementById('editUserModal').classList.add('show');
+    } catch (error) {
+        console.error('Error loading user:', error);
+        showToast('Error loading user details', 'error');
+    }
+}
+
+function closeEditUserModal() {
+    document.getElementById('editUserModal').classList.remove('show');
+}
+
+async function handleEditUserSubmit(e) {
+    e.preventDefault();
+
+    const userId = document.getElementById('editUserId').value;
+    const userData = {
+        username: document.getElementById('editUsername').value,
+        first_name: document.getElementById('editFirstName').value,
+        last_name: document.getElementById('editLastName').value,
+        email: document.getElementById('editEmail').value,
+        phone: document.getElementById('editPhone').value
+    };
+
+    // Only include password if one was entered
+    const password = document.getElementById('editPassword').value;
+    if (password) {
+        userData.password = password;
+    }
+
+    try {
+        const response = await fetch(`/api/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('User updated successfully');
+            closeEditUserModal();
+            loadAdminUsers();
+            loadUsers();
+        } else {
+            showToast(data.error || 'Failed to update user', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating user:', error);
+        showToast('Error updating user', 'error');
+    }
+}
+
 // =============================================================================
 // Sensors
 // =============================================================================
 
-async function loadSensors() {
+async function loadSensors(silent = false) {
     const grid = document.getElementById('sensorsGrid');
+
+    if (!silent) {
+        grid.innerHTML = `
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading sensors...</p>
+            </div>
+        `;
+    }
 
     try {
         const response = await fetch('/api/yolink/devices');
@@ -272,42 +430,132 @@ async function loadSensors() {
                 <div class="no-sensors">
                     <i class="fas fa-satellite-dish"></i>
                     <p>${data.error}</p>
-                    ${currentUser.isAdmin ? '<p>Configure YoLink in Settings to connect your sensors.</p>' : ''}
+                    ${currentUser.isAdmin ? '<p>Configure in Settings to connect your sensors.</p>' : ''}
                 </div>
             `;
+            updateHubStatus(false);
             return;
         }
 
         if (data.data && data.data.devices && data.data.devices.length > 0) {
             allSensors = data.data.devices;
             renderSensors(allSensors);
+            renderNetworkDiagram(allSensors);
         } else {
             grid.innerHTML = `
                 <div class="no-sensors">
                     <i class="fas fa-satellite-dish"></i>
                     <p>No sensors found</p>
-                    <p>Add sensors to your YoLink account to see them here.</p>
+                    <p>Add sensors to your account to see them here.</p>
+                </div>
+            `;
+            updateHubStatus(false);
+        }
+    } catch (error) {
+        if (!silent) {
+            grid.innerHTML = `
+                <div class="no-sensors">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Failed to load sensors</p>
+                    <button class="btn btn-primary" onclick="loadSensors()">Retry</button>
                 </div>
             `;
         }
-    } catch (error) {
-        grid.innerHTML = `
-            <div class="no-sensors">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>Failed to load sensors</p>
-                <button class="btn btn-primary" onclick="loadSensors()">Retry</button>
-            </div>
-        `;
+        updateHubStatus(false);
     }
+}
+
+function refreshSensors() {
+    refreshCountdown = AUTO_REFRESH_SECONDS;
+    loadSensors(false);
+}
+
+// Update hub status in network diagram
+function updateHubStatus(online) {
+    const hubStatus = document.getElementById('hubStatus');
+    if (hubStatus) {
+        hubStatus.textContent = online ? 'Connected' : 'Offline';
+        hubStatus.className = 'hub-status' + (online ? '' : ' offline');
+    }
+}
+
+// Render network diagram
+function renderNetworkDiagram(devices) {
+    const connections = document.getElementById('networkConnections');
+    if (!connections) return;
+
+    connections.innerHTML = '';
+
+    // Find hub and sensors
+    const hub = devices.find(d => d.type === 'Hub');
+    const sensors = devices.filter(d => d.type !== 'Hub');
+
+    // Update hub status
+    updateHubStatus(hub ? hub.online : false);
+
+    // Create sensor nodes
+    sensors.forEach(device => {
+        const state = device.state || {};
+        const isOnline = device.online !== false;
+        const temp = getDisplayTemperature(state.temperature, state.mode);
+        const lastUpdate = device.reportAt ? formatTimeAgo(device.reportAt) : 'Unknown';
+
+        const node = document.createElement('div');
+        node.className = `sensor-node ${isOnline ? 'online' : ''}`;
+        node.onclick = () => showSensorModal(device.deviceId);
+
+        node.innerHTML = `
+            <div class="sensor-node-icon">
+                <i class="fas fa-thermometer-half"></i>
+            </div>
+            <span class="sensor-node-name">${device.name}</span>
+            <span class="sensor-node-temp">${temp !== null ? temp + (useCelsius ? '°C' : '°F') : '--'}</span>
+            <span class="sensor-node-status">${isOnline ? 'Online' : 'Offline'}</span>
+            <span class="sensor-node-updated">Updated: ${lastUpdate}</span>
+        `;
+
+        connections.appendChild(node);
+    });
+}
+
+// Get display temperature based on unit preference
+function getDisplayTemperature(temp, mode) {
+    if (temp === undefined || temp === null) return null;
+
+    // If sensor mode is Fahrenheit ('f'), value is already in F
+    let tempF = (mode === 'f') ? temp : (temp * 9/5) + 32;
+    let tempC = (mode === 'f') ? (temp - 32) * 5/9 : temp;
+
+    if (useCelsius) {
+        return tempC.toFixed(1);
+    } else {
+        return tempF.toFixed(1);
+    }
+}
+
+// Format time ago
+function formatTimeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
 }
 
 function renderSensors(devices) {
     const grid = document.getElementById('sensorsGrid');
     grid.innerHTML = '';
 
-    devices.forEach(device => {
+    // Filter out hub for sensor grid (hub is shown in network diagram)
+    const sensors = devices.filter(d => d.type !== 'Hub');
+
+    sensors.forEach(device => {
         const state = device.state || {};
         const isOnline = device.online !== false;
+        const lastUpdate = device.reportAt ? formatTimeAgo(device.reportAt) : 'Unknown';
 
         const card = document.createElement('div');
         card.className = 'sensor-card';
@@ -326,6 +574,9 @@ function renderSensors(devices) {
             <p class="sensor-type">${getSensorTypeLabel(device.type)}</p>
             <div class="sensor-readings">
                 ${formatSensorReadings(state, device.type)}
+            </div>
+            <div class="sensor-updated">
+                <i class="fas fa-clock"></i> ${lastUpdate}
             </div>
         `;
         grid.appendChild(card);
@@ -380,17 +631,11 @@ function formatSensorReadings(state, type) {
     let html = '';
 
     if (state.temperature !== undefined) {
-        // Check if sensor is in Fahrenheit mode (mode: "f") or Celsius (mode: "c")
-        // If already in Fahrenheit, don't convert
-        let tempF;
-        if (state.mode === 'f') {
-            tempF = state.temperature;
-        } else {
-            tempF = (state.temperature * 9/5) + 32;
-        }
+        const temp = getDisplayTemperature(state.temperature, state.mode);
+        const unit = useCelsius ? '°C' : '°F';
         html += `
             <div class="reading">
-                <span class="reading-value">${tempF.toFixed(1)}°F</span>
+                <span class="reading-value">${temp}${unit}</span>
                 <span class="reading-label">Temperature</span>
             </div>
         `;

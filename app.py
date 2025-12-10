@@ -54,7 +54,11 @@ login_manager.login_view = 'login'
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
     password_hash = db.Column(db.String(256), nullable=False)
+    first_name = db.Column(db.String(80), nullable=True)
+    last_name = db.Column(db.String(80), nullable=True)
+    phone = db.Column(db.String(20), nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
@@ -70,10 +74,23 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    @property
+    def full_name(self):
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        return self.username
+
     def to_dict(self):
         return {
             'id': self.id,
             'username': self.username,
+            'email': self.email,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'full_name': self.full_name,
+            'phone': self.phone,
             'is_admin': self.is_admin,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None
@@ -315,10 +332,13 @@ def login():
 
     if request.method == 'POST':
         data = request.get_json() if request.is_json else request.form
-        username = data.get('username')
+        login_id = data.get('username')  # Can be username or email
         password = data.get('password')
 
-        user = User.query.filter_by(username=username).first()
+        # Try to find user by username or email
+        user = User.query.filter_by(username=login_id).first()
+        if not user:
+            user = User.query.filter_by(email=login_id).first()
 
         if user and user.check_password(password):
             user.last_login = datetime.utcnow()
@@ -331,7 +351,7 @@ def login():
 
         if request.is_json:
             return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
-        flash('Invalid username or password', 'error')
+        flash('Invalid username/email or password', 'error')
 
     return render_template('login.html')
 
@@ -348,6 +368,10 @@ def register():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
+    email = data.get('email')
+    first_name = data.get('first_name')
+    last_name = data.get('last_name')
+    phone = data.get('phone')
 
     if not username or not password:
         return jsonify({'success': False, 'error': 'Username and password required'}), 400
@@ -355,7 +379,16 @@ def register():
     if User.query.filter_by(username=username).first():
         return jsonify({'success': False, 'error': 'Username already exists'}), 400
 
-    user = User(username=username)
+    if email and User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'error': 'Email already exists'}), 400
+
+    user = User(
+        username=username,
+        email=email if email else None,
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone
+    )
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -409,6 +442,59 @@ def delete_user(user_id):
     db.session.commit()
 
     return jsonify({'success': True, 'message': 'User deleted'})
+
+
+@app.route('/api/users/<int:user_id>', methods=['GET'])
+@login_required
+def get_user(user_id):
+    """Get a single user's details"""
+    if not current_user.is_admin and current_user.id != user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = User.query.get_or_404(user_id)
+    return jsonify(user.to_dict())
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@login_required
+def update_user(user_id):
+    """Update an existing user's details"""
+    if not current_user.is_admin and current_user.id != user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+
+    # Update allowed fields
+    if 'first_name' in data:
+        user.first_name = data['first_name']
+    if 'last_name' in data:
+        user.last_name = data['last_name']
+    if 'email' in data:
+        # Check for duplicate email
+        if data['email'] and data['email'] != user.email:
+            existing = User.query.filter_by(email=data['email']).first()
+            if existing and existing.id != user_id:
+                return jsonify({'success': False, 'error': 'Email already in use'}), 400
+        user.email = data['email'] if data['email'] else None
+    if 'phone' in data:
+        user.phone = data['phone']
+
+    # Only admin can change username
+    if current_user.is_admin and 'username' in data:
+        if data['username'] != user.username:
+            existing = User.query.filter_by(username=data['username']).first()
+            if existing and existing.id != user_id:
+                return jsonify({'success': False, 'error': 'Username already in use'}), 400
+            user.username = data['username']
+
+    # Password change (optional)
+    if 'password' in data and data['password']:
+        user.set_password(data['password'])
+
+    db.session.commit()
+
+    return jsonify({'success': True, 'user': user.to_dict(), 'message': 'User updated successfully'})
 
 
 @app.route('/api/users/<int:user_id>/admin', methods=['PUT'])
@@ -977,6 +1063,11 @@ def generate_fda_report():
     # Report info
     report_date = datetime.now().strftime('%B %d, %Y at %I:%M %p')
     story.append(Paragraph(f"<b>Report Generated:</b> {report_date}", normal_style))
+    story.append(Paragraph(f"<b>Generated By:</b> {current_user.full_name}", normal_style))
+    if current_user.email:
+        story.append(Paragraph(f"<b>Contact Email:</b> {current_user.email}", normal_style))
+    if current_user.phone:
+        story.append(Paragraph(f"<b>Contact Phone:</b> {current_user.phone}", normal_style))
     story.append(Paragraph(f"<b>Report Period:</b> {since.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')} ({days} days)", normal_style))
     story.append(Paragraph(f"<b>Total Readings:</b> {len(readings)}", normal_style))
     story.append(Paragraph(f"<b>Devices Monitored:</b> {len(devices)}", normal_style))
@@ -984,7 +1075,7 @@ def generate_fda_report():
 
     # Compliance statement
     story.append(Paragraph("COMPLIANCE STATEMENT", heading_style))
-    compliance_text = """This report documents temperature monitoring data collected from YoLink sensors
+    compliance_text = """This report documents temperature monitoring data collected from sensors
     installed at 3 Strands Cattle Co. facilities. Temperature readings are automatically recorded
     and stored to ensure compliance with FDA Food Safety Modernization Act (FSMA) requirements
     for cold chain monitoring and documentation."""

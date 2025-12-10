@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3 Strands Cattle Co. | Dashboard</title>
+    <title>3 Strands Cattle Co. | Command Center</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <link rel="apple-touch-icon" href="/static/logo.png">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
@@ -19,7 +21,9 @@
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <div class="strands-mini">
+                <img src="/static/logo.png" alt="3 Strands" class="sidebar-logo"
+                     onerror="this.style.display='none'; document.querySelector('.strands-mini').style.display='flex';">
+                <div class="strands-mini" style="display: none;">
                     <span></span><span></span><span></span>
                 </div>
                 <div class="brand-text">
@@ -91,8 +95,16 @@
             <!-- Sensors Section -->
             <section class="section active" id="sensors-section">
                 <div class="section-header">
-                    <h3>YoLink Sensors</h3>
+                    <h3><i class="fas fa-truck"></i> ALPHA Trailer</h3>
                     <div class="section-actions">
+                        <div class="temp-toggle">
+                            <label class="toggle-label">°F</label>
+                            <label class="switch">
+                                <input type="checkbox" id="tempUnitToggle" onchange="toggleTempUnit()">
+                                <span class="slider"></span>
+                            </label>
+                            <label class="toggle-label">°C</label>
+                        </div>
                         <button class="btn btn-secondary" onclick="showFdaReportModal()">
                             <i class="fas fa-file-pdf"></i> FDA Report
                         </button>
@@ -101,11 +113,31 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Network Diagram View -->
+                <div class="network-diagram" id="networkDiagram">
+                    <div class="network-hub" id="networkHub">
+                        <div class="hub-icon">
+                            <i class="fas fa-wifi"></i>
+                        </div>
+                        <span class="hub-label">WiFi Hub</span>
+                        <span class="hub-status" id="hubStatus">Connecting...</span>
+                    </div>
+                    <div class="network-connections" id="networkConnections">
+                        <!-- Sensor nodes will be added here dynamically -->
+                    </div>
+                </div>
+
                 <div class="sensors-grid" id="sensorsGrid">
                     <div class="loading-state">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Loading sensors...</p>
                     </div>
+                </div>
+
+                <div class="auto-refresh-status">
+                    <i class="fas fa-clock"></i>
+                    <span>Auto-refresh: <span id="refreshCountdown">60</span>s</span>
                 </div>
             </section>
 
@@ -277,17 +309,78 @@
                 <button class="modal-close" onclick="closeRegisterModal()">&times;</button>
             </div>
             <form id="registerForm">
-                <div class="form-group">
-                    <label class="form-label">Username</label>
-                    <input type="text" id="newUsername" class="form-input" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">First Name</label>
+                        <input type="text" id="newFirstName" class="form-input" placeholder="John">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" id="newLastName" class="form-input" placeholder="Doe">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Password</label>
+                    <label class="form-label">Username *</label>
+                    <input type="text" id="newUsername" class="form-input" required placeholder="johndoe">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="newEmail" class="form-input" placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" id="newPhone" class="form-input" placeholder="(555) 123-4567">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password *</label>
                     <input type="password" id="newPassword" class="form-input" required>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeRegisterModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal" id="editUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit User</h3>
+                <button class="modal-close" onclick="closeEditUserModal()">&times;</button>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">First Name</label>
+                        <input type="text" id="editFirstName" class="form-input" placeholder="John">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" id="editLastName" class="form-input" placeholder="Doe">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" id="editUsername" class="form-input" placeholder="johndoe">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="editEmail" class="form-input" placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" id="editPhone" class="form-input" placeholder="(555) 123-4567">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">New Password <small style="color: var(--text-muted);">(leave blank to keep current)</small></label>
+                    <input type="password" id="editPassword" class="form-input" placeholder="Enter new password">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
         </div>
