@@ -860,6 +860,327 @@ input:checked + .slider:before {
 }
 
 /* =============================================================================
+   EcoFlow Power Station
+   ============================================================================= */
+
+.ecoflow-container {
+    background: var(--panel-bg);
+    border: 1px solid rgba(212, 168, 83, 0.2);
+    border-radius: 12px;
+    padding: 25px;
+    min-height: 300px;
+}
+
+.ecoflow-loading,
+.ecoflow-unconfigured {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 250px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.ecoflow-loading i,
+.ecoflow-unconfigured i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: var(--primary-gold);
+}
+
+.ecoflow-unconfigured h4 {
+    color: var(--text-light);
+    margin-bottom: 10px;
+}
+
+.ecoflow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(212, 168, 83, 0.2);
+}
+
+.ecoflow-device-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.ecoflow-brand-logo {
+    height: 40px;
+    width: auto;
+}
+
+.ecoflow-device-info h4 {
+    font-family: 'Orbitron', sans-serif;
+    color: var(--text-light);
+    margin: 0 0 5px 0;
+}
+
+.ecoflow-status {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(0, 212, 170, 0.2);
+    color: var(--accent-teal);
+}
+
+.ecoflow-status.offline {
+    background: rgba(255, 51, 102, 0.2);
+    color: var(--neon-red);
+}
+
+.ecoflow-battery-container {
+    margin-bottom: 25px;
+}
+
+.ecoflow-battery-gauge {
+    position: relative;
+    height: 50px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid rgba(212, 168, 83, 0.3);
+}
+
+.ecoflow-battery-gauge .battery-level {
+    height: 100%;
+    background: linear-gradient(90deg, #00d4aa, #00ff88);
+    transition: width 0.5s ease, background 0.3s ease;
+    border-radius: 6px;
+}
+
+.ecoflow-battery-gauge .battery-percentage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.ecoflow-battery-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 0 5px;
+}
+
+.ecoflow-state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.ecoflow-state.charging {
+    color: #00d4aa;
+}
+
+.ecoflow-state.charging i {
+    animation: pulse 1s infinite;
+}
+
+.ecoflow-state.discharging {
+    color: #ffa500;
+}
+
+.ecoflow-time {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+.ecoflow-power-flow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 25px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.power-input,
+.power-output {
+    text-align: center;
+}
+
+.power-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+.power-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-light);
+}
+
+.power-input .power-value {
+    color: #00d4aa;
+}
+
+.power-output .power-value {
+    color: #ffa500;
+}
+
+.power-sources,
+.power-outputs {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+.power-sources span,
+.power-outputs span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.power-battery-icon {
+    font-size: 48px;
+    color: var(--primary-gold);
+}
+
+.power-battery-icon .charging {
+    animation: pulse 1s infinite;
+    color: #00d4aa;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.ecoflow-controls {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 25px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.ecoflow-control-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.ecoflow-control-group label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.toggle-btn {
+    position: relative;
+    width: 60px;
+    height: 30px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.toggle-btn .toggle-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 22px;
+    height: 22px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.toggle-btn.active {
+    background: rgba(0, 212, 170, 0.3);
+    border-color: var(--accent-teal);
+}
+
+.toggle-btn.active .toggle-slider {
+    left: 32px;
+    background: var(--accent-teal);
+    box-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
+.ecoflow-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.ecoflow-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.ecoflow-stat i {
+    font-size: 20px;
+    color: var(--primary-gold);
+}
+
+.ecoflow-stat .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ecoflow-stat .stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+/* Responsive EcoFlow */
+@media (max-width: 768px) {
+    .ecoflow-power-flow {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .power-battery-icon {
+        order: -1;
+    }
+
+    .ecoflow-controls {
+        flex-wrap: wrap;
+    }
+
+    .ecoflow-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =============================================================================
    Kanban Board (Trello-like Tasks)
    ============================================================================= */
 
