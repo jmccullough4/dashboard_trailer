@@ -1263,8 +1263,25 @@ def generate_fda_report():
 
 import subprocess
 
+
+def is_running_in_docker():
+    """Detect if running inside a Docker container"""
+    # Check for .dockerenv file
+    if os.path.exists('/.dockerenv'):
+        return True
+    # Check cgroup for docker
+    try:
+        with open('/proc/1/cgroup', 'r') as f:
+            return 'docker' in f.read()
+    except Exception:
+        pass
+    return False
+
+
 def get_git_version():
     """Get current git commit info"""
+    in_docker = is_running_in_docker()
+
     try:
         # Get short commit hash
         commit_hash = subprocess.check_output(
@@ -1291,7 +1308,8 @@ def get_git_version():
             'commit': commit_hash,
             'date': commit_date,
             'branch': branch,
-            'version': f"v1.0.0-{commit_hash}"
+            'version': f"v1.0.0-{commit_hash}",
+            'docker': in_docker
         }
     except Exception as e:
         return {
@@ -1299,6 +1317,7 @@ def get_git_version():
             'date': 'unknown',
             'branch': 'unknown',
             'version': 'v1.0.0',
+            'docker': in_docker,
             'error': str(e)
         }
 
@@ -1316,6 +1335,14 @@ def check_for_updates():
     """Check if updates are available from GitHub"""
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
+
+    # Check if running in Docker
+    if is_running_in_docker():
+        return jsonify({
+            'docker': True,
+            'update_available': False,
+            'message': 'Running in Docker. To update, rebuild the container: docker-compose build && docker-compose up -d'
+        })
 
     try:
         app_dir = os.path.dirname(os.path.abspath(__file__))
