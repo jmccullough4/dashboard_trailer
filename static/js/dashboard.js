@@ -735,6 +735,18 @@ function createTaskCard(task) {
     const dueDate = task.due_date ? new Date(task.due_date) : null;
     const isOverdue = dueDate && dueDate < new Date() && task.status !== 'complete';
 
+    // Define status flow for move buttons
+    const statusFlow = ['assigned', 'in_progress', 'review', 'complete'];
+    const statusLabels = {
+        'assigned': 'Assigned',
+        'in_progress': 'In Progress',
+        'review': 'Review',
+        'complete': 'Complete'
+    };
+    const currentIndex = statusFlow.indexOf(task.status);
+    const prevStatus = currentIndex > 0 ? statusFlow[currentIndex - 1] : null;
+    const nextStatus = currentIndex < statusFlow.length - 1 ? statusFlow[currentIndex + 1] : null;
+
     card.innerHTML = `
         <div class="task-priority ${task.priority}"></div>
         <h5 class="task-title">${escapeHtml(task.title)}</h5>
@@ -750,6 +762,18 @@ function createTaskCard(task) {
                     ${dueDate.toLocaleDateString()}
                 </span>
             ` : ''}
+        </div>
+        <div class="task-move-buttons">
+            ${prevStatus ? `
+                <button class="task-move-btn prev" onclick="moveTask(${task.id}, '${prevStatus}')" title="Move to ${statusLabels[prevStatus]}">
+                    <i class="fas fa-arrow-left"></i> ${statusLabels[prevStatus]}
+                </button>
+            ` : '<span class="task-move-placeholder"></span>'}
+            ${nextStatus ? `
+                <button class="task-move-btn next" onclick="moveTask(${task.id}, '${nextStatus}')" title="Move to ${statusLabels[nextStatus]}">
+                    ${statusLabels[nextStatus]} <i class="fas fa-arrow-right"></i>
+                </button>
+            ` : '<span class="task-move-placeholder"></span>'}
         </div>
         <div class="task-actions">
             <button class="task-action-btn" onclick="editTask(${task.id})">Edit</button>
@@ -848,6 +872,32 @@ async function deleteTask(taskId) {
         }
     } catch (error) {
         showToast('Error deleting task', 'error');
+    }
+}
+
+async function moveTask(taskId, newStatus) {
+    const statusLabels = {
+        'assigned': 'Assigned',
+        'in_progress': 'In Progress',
+        'review': 'Review',
+        'complete': 'Complete'
+    };
+
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+
+        if (response.ok) {
+            showToast(`Task moved to ${statusLabels[newStatus]}`);
+            loadTasks();
+        } else {
+            showToast('Failed to move task', 'error');
+        }
+    } catch (error) {
+        showToast('Error moving task', 'error');
     }
 }
 
