@@ -1002,6 +1002,65 @@ input:checked + .slider:before {
     gap: 4px;
 }
 
+.task-move-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+    padding-left: 10px;
+}
+
+.task-move-btn {
+    padding: 6px 12px;
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(0, 212, 170, 0.05));
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    border-radius: 4px;
+    color: var(--accent-teal);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.task-move-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.3), rgba(0, 212, 170, 0.15));
+    border-color: var(--accent-teal);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 212, 170, 0.3);
+}
+
+.task-move-btn.prev {
+    background: linear-gradient(135deg, rgba(212, 168, 83, 0.15), rgba(212, 168, 83, 0.05));
+    border-color: rgba(212, 168, 83, 0.3);
+    color: var(--primary-gold);
+}
+
+.task-move-btn.prev:hover {
+    background: linear-gradient(135deg, rgba(212, 168, 83, 0.3), rgba(212, 168, 83, 0.15));
+    border-color: var(--primary-gold);
+    box-shadow: 0 3px 10px rgba(212, 168, 83, 0.3);
+}
+
+.task-move-btn.next {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(0, 212, 170, 0.05));
+    border-color: rgba(0, 212, 170, 0.3);
+    color: var(--accent-teal);
+}
+
+.task-move-btn.next:hover {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.3), rgba(0, 212, 170, 0.15));
+    border-color: var(--accent-teal);
+    box-shadow: 0 3px 10px rgba(0, 212, 170, 0.3);
+}
+
+.task-move-placeholder {
+    flex: 1;
+}
+
 .task-actions {
     display: flex;
     gap: 8px;
