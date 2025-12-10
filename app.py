@@ -203,6 +203,46 @@ class SensorReading(db.Model):
         }
 
 
+class EcoFlowConfig(db.Model):
+    """EcoFlow API configuration"""
+    id = db.Column(db.Integer, primary_key=True)
+    access_key = db.Column(db.String(255))
+    secret_key = db.Column(db.String(255))
+    device_sn = db.Column(db.String(100))  # Device serial number
+    device_name = db.Column(db.String(255), default='Delta 2 Max')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EcoFlowReading(db.Model):
+    """Store EcoFlow battery readings for history"""
+    id = db.Column(db.Integer, primary_key=True)
+    device_sn = db.Column(db.String(100), nullable=False, index=True)
+    soc = db.Column(db.Integer)  # Battery percentage
+    watts_in = db.Column(db.Integer)  # Input power (charging)
+    watts_out = db.Column(db.Integer)  # Output power (discharging)
+    ac_out_watts = db.Column(db.Integer)  # AC output power
+    ac_enabled = db.Column(db.Boolean)  # AC output enabled
+    remain_time = db.Column(db.Integer)  # Remaining time in minutes
+    battery_temp = db.Column(db.Integer)  # Battery temperature
+    solar_in_watts = db.Column(db.Integer)  # Solar input power
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'device_sn': self.device_sn,
+            'soc': self.soc,
+            'watts_in': self.watts_in,
+            'watts_out': self.watts_out,
+            'ac_out_watts': self.ac_out_watts,
+            'ac_enabled': self.ac_enabled,
+            'remain_time': self.remain_time,
+            'battery_temp': self.battery_temp,
+            'solar_in_watts': self.solar_in_watts,
+            'recorded_at': self.recorded_at.isoformat() if self.recorded_at else None
+        }
+
+
 # =============================================================================
 # User Loader
 # =============================================================================
@@ -312,6 +352,241 @@ class YoLinkAPI:
             target_device=device_id,  # Just the deviceId string
             device_token=device_token  # Token as separate root field
         )
+
+
+# =============================================================================
+# EcoFlow API Integration
+# =============================================================================
+
+class EcoFlowAPI:
+    """EcoFlow Developer API integration for Delta 2 Max"""
+    BASE_URL = "https://api.ecoflow.com/iot-open/sign/device/quota"
+
+    @staticmethod
+    def get_config():
+        return EcoFlowConfig.query.first()
+
+    @staticmethod
+    def generate_signature(access_key, secret_key, nonce, timestamp):
+        """Generate HMAC signature for EcoFlow API authentication"""
+        import hmac
+        # EcoFlow uses a specific signing method
+        sign_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
+        signature = hmac.new(
+            secret_key.encode('utf-8'),
+            sign_str.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        return signature
+
+    @staticmethod
+    def get_all_quotas():
+        """Get all device quotas (full status)"""
+        config = EcoFlowAPI.get_config()
+        if not config or not config.access_key or not config.secret_key or not config.device_sn:
+            return {'error': 'EcoFlow not configured', 'configured': False}
+
+        try:
+            import time
+            nonce = str(int(time.time() * 1000))
+            timestamp = str(int(time.time() * 1000))
+
+            signature = EcoFlowAPI.generate_signature(
+                config.access_key, config.secret_key, nonce, timestamp
+            )
+
+            headers = {
+                'Content-Type': 'application/json',
+                'accessKey': config.access_key,
+                'nonce': nonce,
+                'timestamp': timestamp,
+                'sign': signature
+            }
+
+            response = requests.get(
+                f"{EcoFlowAPI.BASE_URL}/all",
+                headers=headers,
+                params={'sn': config.device_sn},
+                timeout=30
+            )
+
+            data = response.json()
+
+            # Store reading if successful
+            if data.get('code') == '0' and data.get('data'):
+                EcoFlowAPI.store_reading(config.device_sn, data['data'])
+
+            return data
+        except requests.exceptions.RequestException as e:
+            return {'error': f'Network error: {str(e)}', 'configured': True}
+        except Exception as e:
+            return {'error': str(e), 'configured': True}
+
+    @staticmethod
+    def get_quotas(quotas_list):
+        """Get specific quotas from device"""
+        config = EcoFlowAPI.get_config()
+        if not config or not config.access_key or not config.secret_key or not config.device_sn:
+            return {'error': 'EcoFlow not configured', 'configured': False}
+
+        try:
+            import time
+            nonce = str(int(time.time() * 1000))
+            timestamp = str(int(time.time() * 1000))
+
+            signature = EcoFlowAPI.generate_signature(
+                config.access_key, config.secret_key, nonce, timestamp
+            )
+
+            headers = {
+                'Content-Type': 'application/json',
+                'accessKey': config.access_key,
+                'nonce': nonce,
+                'timestamp': timestamp,
+                'sign': signature
+            }
+
+            payload = {
+                'sn': config.device_sn,
+                'params': {
+                    'quotas': quotas_list
+                }
+            }
+
+            response = requests.get(
+                EcoFlowAPI.BASE_URL,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            return response.json()
+        except Exception as e:
+            return {'error': str(e), 'configured': True}
+
+    @staticmethod
+    def set_quota(module_type, operate_type, params):
+        """Set device quota (control device)"""
+        config = EcoFlowAPI.get_config()
+        if not config or not config.access_key or not config.secret_key or not config.device_sn:
+            return {'error': 'EcoFlow not configured', 'configured': False}
+
+        try:
+            import time
+            nonce = str(int(time.time() * 1000))
+            timestamp = str(int(time.time() * 1000))
+
+            signature = EcoFlowAPI.generate_signature(
+                config.access_key, config.secret_key, nonce, timestamp
+            )
+
+            headers = {
+                'Content-Type': 'application/json',
+                'accessKey': config.access_key,
+                'nonce': nonce,
+                'timestamp': timestamp,
+                'sign': signature
+            }
+
+            payload = {
+                'id': int(time.time()),
+                'sn': config.device_sn,
+                'version': '1.0',
+                'moduleType': module_type,
+                'operateType': operate_type,
+                'params': params
+            }
+
+            response = requests.put(
+                EcoFlowAPI.BASE_URL,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            return response.json()
+        except Exception as e:
+            return {'error': str(e), 'configured': True}
+
+    @staticmethod
+    def store_reading(device_sn, data):
+        """Store EcoFlow reading in database"""
+        try:
+            reading = EcoFlowReading(
+                device_sn=device_sn,
+                soc=data.get('pd.soc') or data.get('bms_bmsStatus.soc'),
+                watts_in=data.get('pd.wattsInSum'),
+                watts_out=data.get('pd.wattsOutSum'),
+                ac_out_watts=data.get('inv.outputWatts'),
+                ac_enabled=data.get('inv.cfgAcEnabled') == 1,
+                remain_time=data.get('pd.remainTime'),
+                battery_temp=data.get('bms_bmsStatus.temp'),
+                solar_in_watts=data.get('mppt.inWatts')
+            )
+            db.session.add(reading)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error storing EcoFlow reading: {e}")
+
+    @staticmethod
+    def parse_status(data):
+        """Parse raw EcoFlow data into a user-friendly format"""
+        if not data or 'error' in data:
+            return data
+
+        raw = data.get('data', data)
+
+        # Calculate remaining time display
+        remain_time = raw.get('pd.remainTime', 0)
+        if remain_time and remain_time != 5999:
+            hours = abs(remain_time) // 60
+            mins = abs(remain_time) % 60
+            if remain_time > 0:
+                time_display = f"{hours}h {mins}m until full"
+            else:
+                time_display = f"{hours}h {mins}m remaining"
+        else:
+            time_display = "Calculating..."
+
+        # Determine charging/discharging state
+        watts_in = raw.get('pd.wattsInSum', 0)
+        watts_out = raw.get('pd.wattsOutSum', 0)
+        if watts_in > watts_out:
+            state = 'charging'
+        elif watts_out > 0:
+            state = 'discharging'
+        else:
+            state = 'idle'
+
+        return {
+            'configured': True,
+            'online': True,
+            'soc': raw.get('pd.soc', 0),
+            'watts_in': watts_in,
+            'watts_out': watts_out,
+            'state': state,
+            'remain_time': remain_time,
+            'remain_time_display': time_display,
+            'ac_enabled': raw.get('inv.cfgAcEnabled', 0) == 1,
+            'ac_output_watts': raw.get('inv.outputWatts', 0),
+            'ac_xboost': raw.get('inv.cfgAcXboost', 0) == 1,
+            'dc_enabled': raw.get('pd.dcOutState', 0) == 1,
+            'battery_temp': raw.get('bms_bmsStatus.temp'),
+            'inv_temp': raw.get('inv.outTemp'),
+            'solar_in_watts': raw.get('mppt.inWatts', 0),
+            'solar_in_volts': (raw.get('mppt.inVol', 0) or 0) / 10,
+            'car_out_watts': raw.get('mppt.carOutWatts', 0),
+            'car_state': raw.get('mppt.carState', 0) == 1,
+            'beep_mode': raw.get('pd.beepMode', 0) == 0,  # 0 = normal, 1 = mute
+            'brightness': raw.get('pd.brightLevel', 3),
+            'standby_min': raw.get('pd.standbyMin', 0),
+            'fast_charge_watts': raw.get('inv.FastChgWatts', 0),
+            'slow_charge_watts': raw.get('inv.SlowChgWatts', 0),
+            'max_charge_soc': raw.get('bms_emsStatus.maxChargeSoc', 100),
+            'min_discharge_soc': raw.get('bms_emsStatus.minDsgSoc', 0),
+            'backup_reserve': raw.get('pd.bpPowerSoc', 0)
+        }
 
 
 # =============================================================================
@@ -959,6 +1234,193 @@ def get_device_history(device_id):
 
     return jsonify({
         'device_id': device_id,
+        'hours': hours,
+        'count': len(readings),
+        'readings': [r.to_dict() for r in readings]
+    })
+
+
+# =============================================================================
+# Routes - EcoFlow Power Station
+# =============================================================================
+
+@app.route('/api/ecoflow/config', methods=['GET'])
+@login_required
+def get_ecoflow_config():
+    """Get EcoFlow configuration"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    config = EcoFlowConfig.query.first()
+    if config:
+        return jsonify({
+            'configured': True,
+            'device_sn': config.device_sn,
+            'device_name': config.device_name,
+            'has_access_key': bool(config.access_key),
+            'has_secret_key': bool(config.secret_key)
+        })
+    return jsonify({'configured': False})
+
+
+@app.route('/api/ecoflow/config', methods=['POST'])
+@login_required
+def save_ecoflow_config():
+    """Save EcoFlow configuration"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+
+    config = EcoFlowConfig.query.first()
+    if not config:
+        config = EcoFlowConfig()
+        db.session.add(config)
+
+    if 'access_key' in data and data['access_key']:
+        config.access_key = data['access_key']
+    if 'secret_key' in data and data['secret_key']:
+        config.secret_key = data['secret_key']
+    if 'device_sn' in data:
+        config.device_sn = data['device_sn']
+    if 'device_name' in data:
+        config.device_name = data['device_name']
+
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'EcoFlow configuration saved'})
+
+
+@app.route('/api/ecoflow/status', methods=['GET'])
+@login_required
+def get_ecoflow_status():
+    """Get current EcoFlow device status"""
+    config = EcoFlowConfig.query.first()
+    if not config or not config.access_key:
+        return jsonify({
+            'configured': False,
+            'error': 'EcoFlow not configured'
+        })
+
+    raw_data = EcoFlowAPI.get_all_quotas()
+
+    if 'error' in raw_data:
+        return jsonify(raw_data)
+
+    parsed = EcoFlowAPI.parse_status(raw_data)
+    parsed['device_name'] = config.device_name or 'Delta 2 Max'
+    parsed['device_sn'] = config.device_sn
+
+    return jsonify(parsed)
+
+
+@app.route('/api/ecoflow/control/ac', methods=['POST'])
+@login_required
+def control_ecoflow_ac():
+    """Toggle AC output on/off"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+    xboost = data.get('xboost', False)
+
+    result = EcoFlowAPI.set_quota(
+        module_type=3,  # INV
+        operate_type='acOutCfg',
+        params={
+            'enabled': 1 if enabled else 0,
+            'xboost': 1 if xboost else 0,
+            'out_voltage': 4294967295,  # Read-only
+            'out_freq': 2  # 60 Hz
+        }
+    )
+
+    return jsonify(result)
+
+
+@app.route('/api/ecoflow/control/dc', methods=['POST'])
+@login_required
+def control_ecoflow_dc():
+    """Toggle DC (USB) output on/off"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+
+    result = EcoFlowAPI.set_quota(
+        module_type=1,  # PD
+        operate_type='dcOutCfg',
+        params={'enabled': 1 if enabled else 0}
+    )
+
+    return jsonify(result)
+
+
+@app.route('/api/ecoflow/control/charging', methods=['POST'])
+@login_required
+def control_ecoflow_charging():
+    """Set charging parameters"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+
+    result = EcoFlowAPI.set_quota(
+        module_type=3,  # INV
+        operate_type='acChgCfg',
+        params={
+            'fastChgWatts': data.get('fast_charge_watts', 2400),
+            'slowChgWatts': data.get('slow_charge_watts', 400),
+            'chgPauseFlag': 0
+        }
+    )
+
+    return jsonify(result)
+
+
+@app.route('/api/ecoflow/control/backup', methods=['POST'])
+@login_required
+def control_ecoflow_backup():
+    """Set backup reserve level"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    backup_soc = data.get('backup_soc', 20)
+
+    result = EcoFlowAPI.set_quota(
+        module_type=1,  # PD
+        operate_type='watthConfig',
+        params={
+            'isConfig': 0,
+            'bpPowerSoc': backup_soc,
+            'minDsgSoc': 255,
+            'minChgSoc': 255
+        }
+    )
+
+    return jsonify(result)
+
+
+@app.route('/api/ecoflow/history', methods=['GET'])
+@login_required
+def get_ecoflow_history():
+    """Get historical EcoFlow readings"""
+    hours = request.args.get('hours', 24, type=int)
+    limit = request.args.get('limit', 500, type=int)
+
+    hours = min(hours, 168)  # Max 1 week
+    limit = min(limit, 1000)
+
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    readings = EcoFlowReading.query.filter(
+        EcoFlowReading.recorded_at > since
+    ).order_by(EcoFlowReading.recorded_at.asc()).limit(limit).all()
+
+    return jsonify({
         'hours': hours,
         'count': len(readings),
         'readings': [r.to_dict() for r in readings]

@@ -38,6 +38,10 @@
                 <i class="fas fa-satellite-dish"></i>
                 <span>Sensors</span>
             </a>
+            <a href="#" class="nav-item" data-section="power">
+                <i class="fas fa-car-battery"></i>
+                <span>Power</span>
+            </a>
             <a href="#" class="nav-item" data-section="tasks">
                 <i class="fas fa-tasks"></i>
                 <span>Tasks</span>
@@ -142,6 +146,137 @@
                 <div class="auto-refresh-status">
                     <i class="fas fa-clock"></i>
                     <span>Auto-refresh: <span id="refreshCountdown">60</span>s</span>
+                </div>
+            </section>
+
+            <!-- EcoFlow Power Section -->
+            <section class="section" id="power-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-car-battery"></i> Alpha Trailer Power</h3>
+                    <button class="btn btn-secondary" onclick="refreshEcoFlow()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+
+                <div class="ecoflow-container" id="ecoflowContainer">
+                    <!-- Loading state -->
+                    <div class="ecoflow-loading" id="ecoflowLoading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading power station status...</p>
+                    </div>
+
+                    <!-- Not configured state -->
+                    <div class="ecoflow-unconfigured" id="ecoflowUnconfigured" style="display: none;">
+                        <i class="fas fa-plug"></i>
+                        <h4>EcoFlow Not Configured</h4>
+                        <p>Configure your EcoFlow Delta 2 Max to monitor freezer power.</p>
+                        {% if user.is_admin %}
+                        <button class="btn btn-primary" onclick="showEcoFlowConfigModal()">
+                            <i class="fas fa-cog"></i> Configure EcoFlow
+                        </button>
+                        {% endif %}
+                    </div>
+
+                    <!-- Main power display -->
+                    <div class="ecoflow-dashboard" id="ecoflowDashboard" style="display: none;">
+                        <!-- Device header -->
+                        <div class="ecoflow-header">
+                            <div class="ecoflow-device-info">
+                                <img src="/static/ecoflow-logo.png" alt="EcoFlow" class="ecoflow-brand-logo" onerror="this.style.display='none'">
+                                <div>
+                                    <h4 id="ecoflowDeviceName">Delta 2 Max</h4>
+                                    <span class="ecoflow-status" id="ecoflowStatus">Online</span>
+                                </div>
+                            </div>
+                            {% if user.is_admin %}
+                            <button class="btn btn-sm btn-secondary" onclick="showEcoFlowConfigModal()">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        <!-- Battery gauge -->
+                        <div class="ecoflow-battery-container">
+                            <div class="ecoflow-battery-gauge">
+                                <div class="battery-level" id="ecoflowBatteryLevel" style="width: 0%"></div>
+                                <div class="battery-percentage" id="ecoflowBatteryPercent">0%</div>
+                            </div>
+                            <div class="ecoflow-battery-info">
+                                <span class="ecoflow-state" id="ecoflowState">
+                                    <i class="fas fa-circle"></i> Idle
+                                </span>
+                                <span class="ecoflow-time" id="ecoflowTime">--</span>
+                            </div>
+                        </div>
+
+                        <!-- Power flow -->
+                        <div class="ecoflow-power-flow">
+                            <div class="power-input">
+                                <div class="power-label">Input</div>
+                                <div class="power-value" id="ecoflowInputWatts">0W</div>
+                                <div class="power-sources">
+                                    <span id="ecoflowSolarInput" style="display: none;">
+                                        <i class="fas fa-sun"></i> <span>0W</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="power-battery-icon">
+                                <i class="fas fa-battery-three-quarters" id="ecoflowBatteryIcon"></i>
+                            </div>
+                            <div class="power-output">
+                                <div class="power-label">Output</div>
+                                <div class="power-value" id="ecoflowOutputWatts">0W</div>
+                                <div class="power-outputs">
+                                    <span id="ecoflowAcOutput">
+                                        <i class="fas fa-plug"></i> AC: <span>0W</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Controls (admin only) -->
+                        {% if user.is_admin %}
+                        <div class="ecoflow-controls">
+                            <div class="ecoflow-control-group">
+                                <label>AC Output</label>
+                                <button class="toggle-btn" id="ecoflowAcToggle" onclick="toggleEcoFlowAc()">
+                                    <span class="toggle-slider"></span>
+                                </button>
+                            </div>
+                            <div class="ecoflow-control-group">
+                                <label>DC Output</label>
+                                <button class="toggle-btn" id="ecoflowDcToggle" onclick="toggleEcoFlowDc()">
+                                    <span class="toggle-slider"></span>
+                                </button>
+                            </div>
+                            <div class="ecoflow-control-group">
+                                <label>X-Boost</label>
+                                <button class="toggle-btn" id="ecoflowXboostToggle" onclick="toggleEcoFlowXboost()">
+                                    <span class="toggle-slider"></span>
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Stats grid -->
+                        <div class="ecoflow-stats">
+                            <div class="ecoflow-stat">
+                                <i class="fas fa-thermometer-half"></i>
+                                <span class="stat-label">Battery Temp</span>
+                                <span class="stat-value" id="ecoflowBatteryTemp">--</span>
+                            </div>
+                            <div class="ecoflow-stat">
+                                <i class="fas fa-bolt"></i>
+                                <span class="stat-label">Fast Charge</span>
+                                <span class="stat-value" id="ecoflowFastCharge">--</span>
+                            </div>
+                            <div class="ecoflow-stat">
+                                <i class="fas fa-shield-alt"></i>
+                                <span class="stat-label">Backup Reserve</span>
+                                <span class="stat-value" id="ecoflowBackupReserve">--</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -473,6 +608,52 @@
                     <span>History is recorded each time sensors are refreshed. For inspection reports, refresh sensors regularly to build comprehensive data.</span>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- EcoFlow Config Modal -->
+    <div class="modal" id="ecoflowConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-car-battery"></i> EcoFlow Configuration</h3>
+                <button class="modal-close" onclick="closeEcoFlowConfigModal()">&times;</button>
+            </div>
+            <form id="ecoflowConfigForm" onsubmit="saveEcoFlowConfig(event)">
+                <div class="modal-body">
+                    <p class="modal-description">
+                        Configure your EcoFlow Delta 2 Max power station. You can find your API credentials
+                        in the EcoFlow Developer Portal.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Device Name</label>
+                        <input type="text" id="ecoflowDeviceNameInput" class="form-input"
+                               placeholder="Delta 2 Max (Alpha Trailer)" value="Delta 2 Max">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Device Serial Number</label>
+                        <input type="text" id="ecoflowDeviceSn" class="form-input"
+                               placeholder="R351ZFB4HF6L0030" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Access Key</label>
+                        <input type="password" id="ecoflowAccessKey" class="form-input"
+                               placeholder="Enter your EcoFlow API Access Key">
+                        <small class="form-hint">Leave blank to keep existing key</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Secret Key</label>
+                        <input type="password" id="ecoflowSecretKey" class="form-input"
+                               placeholder="Enter your EcoFlow API Secret Key">
+                        <small class="form-hint">Leave blank to keep existing key</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeEcoFlowConfigModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
