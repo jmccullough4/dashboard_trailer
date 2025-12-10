@@ -979,9 +979,10 @@ def generate_fda_report():
     since = datetime.utcnow() - timedelta(days=days)
     end_date = datetime.utcnow()
 
-    # Get all sensor readings in date range
+    # Get only temperature sensor readings (THSensor)
     readings = SensorReading.query.filter(
-        SensorReading.recorded_at > since
+        SensorReading.recorded_at > since,
+        SensorReading.device_type == 'THSensor'
     ).order_by(SensorReading.device_name, SensorReading.recorded_at).all()
 
     # Group readings by device
@@ -1070,7 +1071,7 @@ def generate_fda_report():
         story.append(Paragraph(f"<b>Contact Phone:</b> {current_user.phone}", normal_style))
     story.append(Paragraph(f"<b>Report Period:</b> {since.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')} ({days} days)", normal_style))
     story.append(Paragraph(f"<b>Total Readings:</b> {len(readings)}", normal_style))
-    story.append(Paragraph(f"<b>Devices Monitored:</b> {len(devices)}", normal_style))
+    story.append(Paragraph(f"<b>Temperature Sensors:</b> {len(devices)}", normal_style))
     story.append(Spacer(1, 0.25*inch))
 
     # Compliance statement
@@ -1082,6 +1083,24 @@ def generate_fda_report():
     story.append(Paragraph(compliance_text, normal_style))
     story.append(Spacer(1, 0.25*inch))
 
+    # Helper function to format temperature in both C and F
+    def format_temp_dual(temp_c):
+        """Format temperature showing both Celsius and Fahrenheit"""
+        if temp_c is None:
+            return "N/A"
+        temp_f = (temp_c * 9/5) + 32
+        return f"{temp_c:.1f}°C / {temp_f:.1f}°F"
+
+    # Try to import matplotlib for graphs
+    try:
+        import matplotlib
+        matplotlib.use('Agg')  # Non-interactive backend
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        GRAPHS_AVAILABLE = True
+    except ImportError:
+        GRAPHS_AVAILABLE = False
+
     # Device summaries
     for device_name, device_data in devices.items():
         device_readings = device_data['readings']
@@ -1089,9 +1108,9 @@ def generate_fda_report():
         if not device_readings:
             continue
 
-        story.append(Paragraph(f"DEVICE: {device_name.upper()}", heading_style))
+        story.append(Paragraph(f"SENSOR: {device_name.upper()}", heading_style))
 
-        # Calculate statistics
+        # Calculate statistics (temperatures stored in Celsius)
         temps = [r.temperature for r in device_readings if r.temperature is not None]
         if temps:
             min_temp = min(temps)
@@ -1101,13 +1120,13 @@ def generate_fda_report():
             stats_data = [
                 ['Statistic', 'Value'],
                 ['Device ID', device_data['device_id']],
-                ['Device Type', device_data['device_type']],
+                ['Device Type', 'Temperature Sensor'],
                 ['Total Readings', str(len(device_readings))],
                 ['First Reading', device_readings[0].recorded_at.strftime('%Y-%m-%d %H:%M:%S UTC')],
                 ['Last Reading', device_readings[-1].recorded_at.strftime('%Y-%m-%d %H:%M:%S UTC')],
-                ['Minimum Temperature', f"{min_temp:.1f}°F"],
-                ['Maximum Temperature', f"{max_temp:.1f}°F"],
-                ['Average Temperature', f"{avg_temp:.1f}°F"],
+                ['Minimum Temperature', format_temp_dual(min_temp)],
+                ['Maximum Temperature', format_temp_dual(max_temp)],
+                ['Average Temperature', format_temp_dual(avg_temp)],
             ]
 
             stats_table = Table(stats_data, colWidths=[2.5*inch, 4*inch])
@@ -1125,6 +1144,57 @@ def generate_fda_report():
             ]))
             story.append(stats_table)
 
+            # Generate temperature graph if matplotlib is available
+            if GRAPHS_AVAILABLE and len(device_readings) > 1:
+                story.append(Spacer(1, 0.2*inch))
+                story.append(Paragraph("<b>Temperature History Graph</b>", normal_style))
+
+                try:
+                    # Create the graph
+                    fig, ax = plt.subplots(figsize=(7, 3), dpi=100)
+
+                    dates = [r.recorded_at for r in device_readings if r.temperature is not None]
+                    temps_c = [r.temperature for r in device_readings if r.temperature is not None]
+                    temps_f = [(t * 9/5) + 32 for t in temps_c]
+
+                    # Plot both C and F on dual axes
+                    ax.plot(dates, temps_f, color='#ff6b6b', linewidth=1.5, label='°F', marker='o', markersize=2)
+                    ax.set_ylabel('Temperature (°F)', color='#ff6b6b')
+                    ax.tick_params(axis='y', labelcolor='#ff6b6b')
+
+                    # Secondary axis for Celsius
+                    ax2 = ax.twinx()
+                    ax2.plot(dates, temps_c, color='#00d4ff', linewidth=1.5, label='°C', linestyle='--')
+                    ax2.set_ylabel('Temperature (°C)', color='#00d4ff')
+                    ax2.tick_params(axis='y', labelcolor='#00d4ff')
+
+                    # Formatting
+                    ax.set_xlabel('Date/Time')
+                    ax.set_title(f'{device_name} - Temperature Over Time', fontsize=10, fontweight='bold')
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
+                    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+                    plt.xticks(rotation=45, ha='right', fontsize=8)
+                    ax.grid(True, alpha=0.3)
+
+                    # Add legend
+                    lines1, labels1 = ax.get_legend_handles_labels()
+                    lines2, labels2 = ax2.get_legend_handles_labels()
+                    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right', fontsize=8)
+
+                    plt.tight_layout()
+
+                    # Save to buffer
+                    graph_buffer = io.BytesIO()
+                    plt.savefig(graph_buffer, format='png', bbox_inches='tight', facecolor='white')
+                    plt.close(fig)
+                    graph_buffer.seek(0)
+
+                    # Add graph to PDF
+                    graph_img = Image(graph_buffer, width=6.5*inch, height=2.5*inch)
+                    story.append(graph_img)
+                except Exception as e:
+                    story.append(Paragraph(f"<i>Graph generation failed: {str(e)}</i>", normal_style))
+
         # Sample of readings (last 20)
         story.append(Spacer(1, 0.15*inch))
         story.append(Paragraph("<b>Recent Temperature Readings (Sample)</b>", normal_style))
@@ -1133,7 +1203,7 @@ def generate_fda_report():
         readings_data = [['Date/Time (UTC)', 'Temperature', 'Humidity']]
 
         for reading in sample_readings:
-            temp_str = f"{reading.temperature:.1f}°F" if reading.temperature else "N/A"
+            temp_str = format_temp_dual(reading.temperature)
             humidity_str = f"{reading.humidity}%" if reading.humidity and reading.humidity > 0 else "N/A"
             readings_data.append([
                 reading.recorded_at.strftime('%Y-%m-%d %H:%M'),
@@ -1141,7 +1211,7 @@ def generate_fda_report():
                 humidity_str
             ])
 
-        readings_table = Table(readings_data, colWidths=[2.5*inch, 2*inch, 2*inch])
+        readings_table = Table(readings_data, colWidths=[2*inch, 2.5*inch, 2*inch])
         readings_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D2691E')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1167,8 +1237,8 @@ def generate_fda_report():
         textColor=colors.gray
     )
     story.append(Paragraph("─" * 80, footer_style))
-    story.append(Paragraph("This report was automatically generated by 3 Strands Cattle Co. Ranch Command Center", footer_style))
-    story.append(Paragraph("For questions regarding this report, please contact ranch management.", footer_style))
+    story.append(Paragraph("This report was automatically generated by 3 Strands Cattle Co. Command Center", footer_style))
+    story.append(Paragraph("For questions regarding this report, please contact the generator listed above.", footer_style))
 
     # Build the PDF
     doc.build(story)
