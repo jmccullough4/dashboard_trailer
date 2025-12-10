@@ -440,7 +440,6 @@ async function loadSensors(silent = false) {
 
         if (data.data && data.data.devices && data.data.devices.length > 0) {
             allSensors = data.data.devices;
-            renderSensors(allSensors);
             renderNetworkDiagram(allSensors);
         } else {
             grid.innerHTML = `
@@ -520,12 +519,13 @@ function renderNetworkDiagram(devices) {
 }
 
 // Get display temperature based on unit preference
+// YoLink API always returns temperature in Celsius
 function getDisplayTemperature(temp, mode) {
     if (temp === undefined || temp === null) return null;
 
-    // If sensor mode is Fahrenheit ('f'), value is already in F
-    let tempF = (mode === 'f') ? temp : (temp * 9/5) + 32;
-    let tempC = (mode === 'f') ? (temp - 32) * 5/9 : temp;
+    // YoLink always reports in Celsius - mode is just display preference in app
+    const tempC = temp;
+    const tempF = (temp * 9/5) + 32;
 
     if (useCelsius) {
         return tempC.toFixed(1);
@@ -1161,14 +1161,10 @@ function showSensorModal(deviceId) {
 
     // Update current stats - only show if data exists
     if (state.temperature !== undefined) {
-        // Check if sensor is in Fahrenheit mode
-        let tempF;
-        if (state.mode === 'f') {
-            tempF = state.temperature;
-        } else {
-            tempF = (state.temperature * 9/5) + 32;
-        }
-        document.getElementById('currentTemp').textContent = `${tempF.toFixed(1)}°F`;
+        // YoLink always reports in Celsius - convert based on user preference
+        const temp = getDisplayTemperature(state.temperature, state.mode);
+        const unit = useCelsius ? '°C' : '°F';
+        document.getElementById('currentTemp').textContent = `${temp}${unit}`;
         tempCard.style.display = '';
     } else {
         tempCard.style.display = 'none';
@@ -1318,10 +1314,14 @@ function renderCharts(readings) {
         return;
     }
 
-    // Prepare data
+    // Prepare data - YoLink stores readings in Celsius
     const labels = readings.map(r => new Date(r.recorded_at));
-    const tempData = readings.map(r => r.temperature !== null ? (r.temperature * 9/5) + 32 : null);
+    const tempData = readings.map(r => {
+        if (r.temperature === null) return null;
+        return useCelsius ? r.temperature : (r.temperature * 9/5) + 32;
+    });
     const humData = readings.map(r => r.humidity);
+    const tempUnit = useCelsius ? '°C' : '°F';
 
     const chartOptions = {
         responsive: true,
@@ -1378,7 +1378,7 @@ function renderCharts(readings) {
         data: {
             labels: labels,
             datasets: [{
-                label: 'Temperature (°F)',
+                label: `Temperature (${tempUnit})`,
                 data: tempData,
                 borderColor: '#ff6b6b',
                 backgroundColor: 'rgba(255, 107, 107, 0.1)',
