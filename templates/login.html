@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3 Strands Cattle Co. | Command Center</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <link rel="apple-touch-icon" href="/static/logo.png">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -189,7 +191,63 @@
             }
         }
 
-        /* Three Strands Logo */
+        /* Company Logo Image */
+        .logo-image-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .logo-image {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            animation: logoPulse 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 20px var(--glow-gold));
+        }
+
+        .logo-image-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 140px;
+            height: 140px;
+            border: 2px dashed rgba(212, 168, 83, 0.4);
+            border-radius: 50%;
+            animation: outerRing 8s linear infinite;
+        }
+
+        .logo-image-container::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 160px;
+            height: 160px;
+            border: 1px solid rgba(212, 168, 83, 0.2);
+            border-radius: 50%;
+            animation: outerRing 12s linear infinite reverse;
+        }
+
+        @keyframes logoPulse {
+            0%, 100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 20px var(--glow-gold));
+            }
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 40px var(--glow-gold)) drop-shadow(0 0 60px rgba(212, 168, 83, 0.5));
+            }
+        }
+
+        @keyframes outerRing {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Fallback Three Strands Logo */
         .strands-symbol {
             display: flex;
             justify-content: center;
@@ -218,10 +276,10 @@
             inset: -6px;
             border: 1px solid rgba(212, 168, 83, 0.3);
             border-radius: 50%;
-            animation: outerRing 4s linear infinite;
+            animation: ringRotate 4s linear infinite;
         }
 
-        @keyframes outerRing {
+        @keyframes ringRotate {
             0% { transform: rotate(0deg); border-style: dashed; }
             100% { transform: rotate(360deg); border-style: dashed; }
         }
@@ -550,7 +608,11 @@
             <!-- Brand Section -->
             <div class="brand-section">
                 <div class="logo-container">
-                    <div class="strands-symbol">
+                    <div class="logo-image-container">
+                        <img src="/static/logo.png" alt="3 Strands Cattle Co." class="logo-image"
+                             onerror="this.parentElement.style.display='none'; document.getElementById('fallbackLogo').style.display='flex';">
+                    </div>
+                    <div class="strands-symbol" id="fallbackLogo" style="display: none;">
                         <div class="logo-circle">
                             <span class="logo-number">3</span>
                         </div>
@@ -563,7 +625,7 @@
                 </div>
                 <h1 class="brand-name">3 Strands</h1>
                 <p class="brand-tagline">Cattle Company</p>
-                <p class="system-name">Ranch Command Center</p>
+                <p class="system-name">Command Center</p>
             </div>
 
             <!-- Login Form -->
@@ -571,13 +633,13 @@
                 <div class="error-message" id="errorMessage"></div>
 
                 <div class="form-group">
-                    <label class="form-label" for="username">Operator ID</label>
+                    <label class="form-label" for="username">Username or Email</label>
                     <input
                         type="text"
                         id="username"
                         name="username"
                         class="form-input"
-                        placeholder="Enter your username"
+                        placeholder="Enter username or email"
                         autocomplete="username"
                         required
                     >
