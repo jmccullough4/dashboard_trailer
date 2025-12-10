@@ -6,9 +6,16 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./uploads:/app/uploads
-      - ./instance:/app/instance
+      # Mount entire codebase for git updates to work
+      - .:/app
+      # Named volumes for persistent data
+      - dashboard_uploads:/app/uploads
+      - dashboard_instance:/app/instance
     environment:
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - FLASK_ENV=production
     restart: unless-stopped
+
+volumes:
+  dashboard_uploads:
+  dashboard_instance:
