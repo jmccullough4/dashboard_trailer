@@ -189,29 +189,98 @@
             }
         }
 
-        /* Three Strands Symbol */
+        /* Three Strands Logo */
         .strands-symbol {
             display: flex;
             justify-content: center;
-            gap: 8px;
+            align-items: center;
+            gap: 12px;
             margin-bottom: 15px;
+        }
+
+        /* Circled 3 */
+        .logo-circle {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            border: 3px solid var(--primary-gold);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            animation: circleGlow 3s ease-in-out infinite;
+            box-shadow: 0 0 15px rgba(212, 168, 83, 0.3);
+        }
+
+        .logo-circle::before {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border: 1px solid rgba(212, 168, 83, 0.3);
+            border-radius: 50%;
+            animation: outerRing 4s linear infinite;
+        }
+
+        @keyframes outerRing {
+            0% { transform: rotate(0deg); border-style: dashed; }
+            100% { transform: rotate(360deg); border-style: dashed; }
+        }
+
+        .logo-number {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 36px;
+            font-weight: 900;
+            color: var(--primary-gold);
+            text-shadow: 0 0 20px var(--glow-gold);
+            animation: numberPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes circleGlow {
+            0%, 100% {
+                box-shadow: 0 0 15px rgba(212, 168, 83, 0.3);
+                border-color: var(--primary-gold);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(212, 168, 83, 0.6), 0 0 50px rgba(212, 168, 83, 0.3);
+                border-color: var(--primary-amber);
+            }
+        }
+
+        @keyframes numberPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* Strands Container */
+        .strands-container {
+            display: flex;
+            gap: 6px;
+            align-items: center;
         }
 
         .strand {
             width: 4px;
-            height: 60px;
-            background: linear-gradient(180deg, var(--primary-gold), var(--accent-copper));
+            height: 50px;
+            background: linear-gradient(180deg, var(--primary-gold), var(--accent-copper), var(--primary-gold));
             border-radius: 2px;
             animation: strandWave 2s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(212, 168, 83, 0.5);
         }
 
-        .strand:nth-child(1) { animation-delay: 0s; }
-        .strand:nth-child(2) { animation-delay: 0.3s; }
-        .strand:nth-child(3) { animation-delay: 0.6s; }
+        .strand:nth-child(1) { animation-delay: 0s; height: 45px; }
+        .strand:nth-child(2) { animation-delay: 0.2s; height: 55px; }
+        .strand:nth-child(3) { animation-delay: 0.4s; height: 45px; }
 
         @keyframes strandWave {
-            0%, 100% { transform: scaleY(1) rotate(-5deg); }
-            50% { transform: scaleY(1.2) rotate(5deg); }
+            0%, 100% {
+                transform: scaleY(1) rotate(-3deg);
+                opacity: 0.9;
+            }
+            50% {
+                transform: scaleY(1.15) rotate(3deg);
+                opacity: 1;
+                box-shadow: 0 0 15px rgba(212, 168, 83, 0.8);
+            }
         }
 
         .brand-name {
@@ -482,9 +551,14 @@
             <div class="brand-section">
                 <div class="logo-container">
                     <div class="strands-symbol">
-                        <div class="strand"></div>
-                        <div class="strand"></div>
-                        <div class="strand"></div>
+                        <div class="logo-circle">
+                            <span class="logo-number">3</span>
+                        </div>
+                        <div class="strands-container">
+                            <div class="strand"></div>
+                            <div class="strand"></div>
+                            <div class="strand"></div>
+                        </div>
                     </div>
                 </div>
                 <h1 class="brand-name">3 Strands</h1>
