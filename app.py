@@ -1336,14 +1336,6 @@ def check_for_updates():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    # Check if running in Docker
-    if is_running_in_docker():
-        return jsonify({
-            'docker': True,
-            'update_available': False,
-            'message': 'Running in Docker. To update, rebuild the container: docker-compose build && docker-compose up -d'
-        })
-
     try:
         app_dir = os.path.dirname(os.path.abspath(__file__))
 

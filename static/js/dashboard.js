@@ -1498,12 +1498,6 @@ async function checkForUpdates() {
             return;
         }
 
-        // Handle Docker environment
-        if (data.docker) {
-            showToast(data.message || 'Running in Docker - rebuild container to update', 'info');
-            return;
-        }
-
         if (data.update_available) {
             pendingUpdate = data;
 
