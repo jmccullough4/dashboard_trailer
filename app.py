@@ -270,12 +270,19 @@ class YoLinkAPI:
 
     @staticmethod
     def get_device_state(device_id, device_token, device_type):
-        """Get device state with proper targetDevice format"""
+        """Get device state - try without token first, then with token as fallback"""
+        # Try without device token first (some YoLink setups work this way)
         target_device = {
-            'deviceId': device_id,
-            'token': device_token
+            'deviceId': device_id
         }
-        return YoLinkAPI.api_request(f'{device_type}.getState', target_device=target_device)
+        result = YoLinkAPI.api_request(f'{device_type}.getState', target_device=target_device)
+
+        # If that fails with token error, try with the device token
+        if result.get('code') == '000103':
+            target_device['token'] = device_token
+            result = YoLinkAPI.api_request(f'{device_type}.getState', target_device=target_device)
+
+        return result
 
 
 # =============================================================================
@@ -882,4 +889,4 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8081)

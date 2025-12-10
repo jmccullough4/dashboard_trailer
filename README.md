@@ -18,7 +18,7 @@ A futuristic dashboard for managing YoLink sensors, tasks, and files for 3 Stran
 docker-compose up -d
 ```
 
-Access the dashboard at `http://localhost:5000`
+Access the dashboard at `http://localhost:8081`
 
 ### Option 2: Local Development
 
