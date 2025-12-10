@@ -863,6 +863,23 @@ input:checked + .slider:before {
    Kanban Board (Trello-like Tasks)
    ============================================================================= */
 
+.task-board-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    background: rgba(0, 212, 170, 0.1);
+    border: 1px solid rgba(0, 212, 170, 0.2);
+    border-radius: 6px;
+    color: var(--accent-teal);
+    font-size: 13px;
+}
+
+.task-board-hint i {
+    font-size: 14px;
+}
+
 .kanban-board {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
