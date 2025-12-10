@@ -747,6 +747,42 @@ def debug_device(device_id):
     })
 
 
+@app.route('/api/yolink/debug', methods=['GET'])
+@login_required
+def debug_all_devices():
+    """Debug endpoint to see all devices and their raw state responses"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    device_list = YoLinkAPI.get_device_list()
+
+    if 'error' in device_list:
+        return jsonify(device_list)
+
+    debug_info = {
+        'device_list_response': device_list,
+        'devices_detail': []
+    }
+
+    if device_list.get('data') and device_list['data'].get('devices'):
+        for device in device_list['data']['devices']:
+            device_id = device.get('deviceId')
+            device_token = device.get('token')
+            device_type = device.get('type', 'THSensor')
+
+            state_result = YoLinkAPI.get_device_state(device_id, device_token, device_type)
+
+            debug_info['devices_detail'].append({
+                'device_id': device_id,
+                'name': device.get('name'),
+                'type': device_type,
+                'token': device_token[:10] + '...' if device_token else None,
+                'state_response': state_result
+            })
+
+    return jsonify(debug_info)
+
+
 def store_sensor_reading(device_id, device_name, device_type, state):
     """Store a sensor reading for history tracking"""
     try:
