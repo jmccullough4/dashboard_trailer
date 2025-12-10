@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadTasks();
     loadFiles();
     startAutoRefresh();
+    loadVersion();
 
     // Form handlers
     document.getElementById('taskForm').addEventListener('submit', handleTaskSubmit);
@@ -1449,4 +1450,163 @@ function renderCharts(readings) {
             }
         }
     });
+}
+
+// =============================================================================
+// Version and Update System
+// =============================================================================
+
+let currentVersion = null;
+let pendingUpdate = null;
+
+async function loadVersion() {
+    try {
+        const response = await fetch('/api/version');
+        const data = await response.json();
+        currentVersion = data;
+
+        const versionText = document.getElementById('versionText');
+        if (versionText) {
+            versionText.textContent = data.version || 'v1.0.0';
+            versionText.title = `Branch: ${data.branch}\nCommit: ${data.commit}\nDate: ${data.date}`;
+        }
+    } catch (error) {
+        console.error('Error loading version:', error);
+        const versionText = document.getElementById('versionText');
+        if (versionText) {
+            versionText.textContent = 'v1.0.0';
+        }
+    }
+}
+
+async function checkForUpdates() {
+    const btn = document.getElementById('updateCheckBtn');
+    if (btn) {
+        btn.classList.add('checking');
+    }
+
+    try {
+        const response = await fetch('/api/updates/check');
+        const data = await response.json();
+
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+
+        if (data.update_available) {
+            pendingUpdate = data;
+
+            // Update button state
+            if (btn) {
+                btn.classList.remove('checking');
+                btn.classList.add('has-update');
+            }
+
+            // Update version info
+            const versionInfo = document.getElementById('versionInfo');
+            if (versionInfo) {
+                versionInfo.classList.add('update-available');
+            }
+
+            // Show update modal
+            showUpdateModal(data);
+        } else {
+            showToast('You are running the latest version!', 'success');
+        }
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+        showToast('Failed to check for updates', 'error');
+    } finally {
+        if (btn) {
+            btn.classList.remove('checking');
+        }
+    }
+}
+
+function showUpdateModal(updateInfo) {
+    document.getElementById('updateCurrentVersion').textContent = updateInfo.current_commit;
+    document.getElementById('updateNewVersion').textContent = updateInfo.remote_commit;
+    document.getElementById('commitCount').textContent = updateInfo.behind_count;
+
+    const commitList = document.getElementById('commitList');
+    commitList.innerHTML = '';
+
+    updateInfo.pending_commits.forEach(commit => {
+        const li = document.createElement('li');
+        li.textContent = commit;
+        commitList.appendChild(li);
+    });
+
+    document.getElementById('updateModal').classList.add('show');
+}
+
+function closeUpdateModal() {
+    document.getElementById('updateModal').classList.remove('show');
+}
+
+async function applyUpdate() {
+    closeUpdateModal();
+
+    // Show update overlay
+    const overlay = document.getElementById('updateOverlay');
+    const progressBar = document.getElementById('updateProgressBar');
+    const statusText = document.getElementById('updateStatus');
+
+    overlay.classList.add('active');
+
+    // Animate progress bar
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90;
+        progressBar.style.width = progress + '%';
+    }, 300);
+
+    statusText.textContent = 'Downloading updates...';
+
+    try {
+        // Simulate some delay for visual effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        statusText.textContent = 'Applying updates...';
+
+        const response = await fetch('/api/updates/apply', { method: 'POST' });
+        const data = await response.json();
+
+        clearInterval(progressInterval);
+
+        if (data.success) {
+            progressBar.style.width = '100%';
+            statusText.textContent = 'Update complete! Restarting...';
+
+            // Wait a moment then reload
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Show success state
+            overlay.classList.add('success');
+            statusText.textContent = 'Reloading application...';
+
+            // Reload the page after animation
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            window.location.reload(true);
+        } else {
+            progressBar.style.width = '0%';
+            statusText.textContent = 'Update failed: ' + (data.error || 'Unknown error');
+
+            // Hide overlay after error display
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            overlay.classList.remove('active');
+            showToast('Update failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        clearInterval(progressInterval);
+        progressBar.style.width = '0%';
+        statusText.textContent = 'Update failed: Network error';
+
+        // Hide overlay after error display
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        overlay.classList.remove('active');
+        showToast('Update failed: Network error', 'error');
+    }
 }

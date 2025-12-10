@@ -72,6 +72,14 @@
                 <i class="fas fa-sign-out-alt"></i>
             </a>
         </div>
+        <div class="version-info" id="versionInfo">
+            <span class="version-text" id="versionText">Loading...</span>
+            {% if user.is_admin %}
+            <button class="update-check-btn" id="updateCheckBtn" onclick="checkForUpdates()" title="Check for updates">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            {% endif %}
+        </div>
     </nav>
 
     <!-- Main Content -->
@@ -503,6 +511,63 @@
                     <i class="fas fa-download"></i> Download Report
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div class="modal" id="updateModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-download"></i> Update Available</h3>
+                <button class="modal-close" onclick="closeUpdateModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="update-info">
+                    <div class="update-versions">
+                        <div class="version-current">
+                            <span class="label">Current</span>
+                            <span class="value" id="updateCurrentVersion">--</span>
+                        </div>
+                        <div class="version-arrow">
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
+                        <div class="version-new">
+                            <span class="label">Available</span>
+                            <span class="value" id="updateNewVersion">--</span>
+                        </div>
+                    </div>
+                    <div class="update-commits" id="updateCommits">
+                        <h4><i class="fas fa-list"></i> Changes (<span id="commitCount">0</span>)</h4>
+                        <ul id="commitList"></ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUpdateModal()">Later</button>
+                <button class="btn btn-primary" onclick="applyUpdate()">
+                    <i class="fas fa-rocket"></i> Install Update
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Overlay (shown during update) -->
+    <div class="update-overlay" id="updateOverlay">
+        <div class="update-animation">
+            <div class="update-logo">
+                <img src="/static/logo.png" alt="3 Strands" class="updating-logo">
+            </div>
+            <div class="update-spinner">
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+            </div>
+            <h2 class="update-title">Updating Command Center</h2>
+            <p class="update-status" id="updateStatus">Downloading updates...</p>
+            <div class="update-progress">
+                <div class="progress-bar" id="updateProgressBar"></div>
+            </div>
+            <p class="update-note">Please wait, the system will restart automatically.</p>
         </div>
     </div>
 
