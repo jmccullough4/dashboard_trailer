@@ -231,7 +231,7 @@ class YoLinkAPI:
         return None
 
     @staticmethod
-    def api_request(method, params=None, target_device=None):
+    def api_request(method, params=None, target_device=None, device_token=None):
         token = YoLinkAPI.get_access_token()
         if not token:
             return {'error': 'YoLink not configured or authentication failed'}
@@ -243,6 +243,8 @@ class YoLinkAPI:
             }
             if target_device:
                 payload['targetDevice'] = target_device
+            if device_token:
+                payload['token'] = device_token
             if params:
                 payload['params'] = params
 
@@ -270,19 +272,16 @@ class YoLinkAPI:
 
     @staticmethod
     def get_device_state(device_id, device_token, device_type):
-        """Get device state - try without token first, then with token as fallback"""
-        # Try without device token first (some YoLink setups work this way)
-        target_device = {
-            'deviceId': device_id
-        }
-        result = YoLinkAPI.api_request(f'{device_type}.getState', target_device=target_device)
+        """Get device state using correct YoLink API v2 format.
 
-        # If that fails with token error, try with the device token
-        if result.get('code') == '000103':
-            target_device['token'] = device_token
-            result = YoLinkAPI.api_request(f'{device_type}.getState', target_device=target_device)
-
-        return result
+        Per YoLink API: targetDevice is just the deviceId string,
+        and token is a separate field at the root level of the payload.
+        """
+        return YoLinkAPI.api_request(
+            f'{device_type}.getState',
+            target_device=device_id,  # Just the deviceId string
+            device_token=device_token  # Token as separate root field
+        )
 
 
 # =============================================================================
