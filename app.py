@@ -686,11 +686,24 @@ def get_yolink_devices():
                 'state': {}
             }
 
-            # Extract state data
-            if state_result.get('data') and state_result['data'].get('state'):
-                state = state_result['data']['state']
+            # Extract state data - if we successfully get state, device is online
+            if state_result.get('code') == '000000' and state_result.get('data'):
+                state_data = state_result['data']
+                state = state_data.get('state', {})
                 device_info['state'] = state
-                device_info['online'] = state.get('online', True)  # Default to true if not specified
+
+                # Device is online if we got valid state data
+                # Check multiple possible online indicators
+                if 'online' in state:
+                    device_info['online'] = state['online']
+                elif state:
+                    # If we have state data with readings, device is online
+                    device_info['online'] = True
+
+                # Also check reportAt - if recent, device is online
+                report_at = state_data.get('reportAt') or state.get('reportAt')
+                if report_at:
+                    device_info['reportAt'] = report_at
 
                 # Store reading in database for history
                 store_sensor_reading(device_id, device_name, device_type, state)
@@ -700,6 +713,38 @@ def get_yolink_devices():
         result['data']['devices'] = enhanced_devices
 
     return jsonify(result)
+
+
+@app.route('/api/yolink/debug/<device_id>', methods=['GET'])
+@login_required
+def debug_device(device_id):
+    """Debug endpoint to see raw API response for a device"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    device_token = request.args.get('token')
+    device_type = request.args.get('type', 'THSensor')
+
+    if not device_token:
+        # Try to find the device in the device list
+        device_list = YoLinkAPI.get_device_list()
+        if device_list.get('data') and device_list['data'].get('devices'):
+            for d in device_list['data']['devices']:
+                if d.get('deviceId') == device_id:
+                    device_token = d.get('token')
+                    device_type = d.get('type', device_type)
+                    break
+
+    if not device_token:
+        return jsonify({'error': 'Device not found or token not provided'}), 404
+
+    state_result = YoLinkAPI.get_device_state(device_id, device_token, device_type)
+
+    return jsonify({
+        'device_id': device_id,
+        'device_type': device_type,
+        'raw_response': state_result
+    })
 
 
 def store_sensor_reading(device_id, device_name, device_type, state):
