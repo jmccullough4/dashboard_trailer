@@ -92,9 +92,14 @@
             <section class="section active" id="sensors-section">
                 <div class="section-header">
                     <h3>YoLink Sensors</h3>
-                    <button class="btn btn-primary" onclick="refreshSensors()">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary" onclick="showFdaReportModal()">
+                            <i class="fas fa-file-pdf"></i> FDA Report
+                        </button>
+                        <button class="btn btn-primary" onclick="refreshSensors()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
                 </div>
                 <div class="sensors-grid" id="sensorsGrid">
                     <div class="loading-state">
@@ -366,6 +371,44 @@
                     <i class="fas fa-info-circle"></i>
                     <span>History is recorded each time sensors are refreshed. For inspection reports, refresh sensors regularly to build comprehensive data.</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FDA Report Modal -->
+    <div class="modal" id="fdaReportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Generate FDA Compliance Report</h3>
+                <button class="modal-close" onclick="closeFdaReportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Generate a professional PDF report for FDA temperature monitoring compliance.
+                    This report includes all temperature readings from your sensors for the selected period.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Report Period</label>
+                    <select id="fdaReportDays" class="form-control">
+                        <option value="7">Last 7 Days</option>
+                        <option value="14">Last 14 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="60">Last 60 Days</option>
+                        <option value="90">Last 90 Days</option>
+                        <option value="180">Last 6 Months</option>
+                        <option value="365">Last Year</option>
+                    </select>
+                </div>
+                <div class="report-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Report includes min/max/average temperatures, device statistics, and a sample of readings for each sensor.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeFdaReportModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="downloadFdaReport()">
+                    <i class="fas fa-download"></i> Download Report
+                </button>
             </div>
         </div>
     </div>

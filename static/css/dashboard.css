@@ -344,6 +344,36 @@ body {
     text-transform: uppercase;
 }
 
+.section-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Modal enhancements */
+.modal-description {
+    color: var(--text-light);
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.report-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(212, 168, 83, 0.1);
+    border-radius: 4px;
+    margin-top: 15px;
+    color: var(--text-light);
+    font-size: 13px;
+}
+
+.report-info i {
+    color: var(--primary-gold);
+    margin-top: 2px;
+}
+
 /* =============================================================================
    Buttons
    ============================================================================= */

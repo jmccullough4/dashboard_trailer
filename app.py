@@ -5,6 +5,7 @@ A futuristic dashboard for YoLink sensors, task management, and file sharing
 """
 
 import os
+import io
 import json
 import hashlib
 import secrets
@@ -12,11 +13,23 @@ import time
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory, flash, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+
+# PDF Generation imports
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -698,9 +711,10 @@ def get_yolink_devices():
                 state = state_data.get('state', {})
                 device_info['state'] = state
 
-                # Device is online if we got valid state data
-                # Check multiple possible online indicators
-                if 'online' in state:
+                # Check online status at multiple levels (Hub has it at data level, sensors in state)
+                if state_data.get('online') is not None:
+                    device_info['online'] = state_data['online']
+                elif state.get('online') is not None:
                     device_info['online'] = state['online']
                 elif state:
                     # If we have state data with readings, device is online
@@ -863,6 +877,223 @@ def get_device_history(device_id):
         'count': len(readings),
         'readings': [r.to_dict() for r in readings]
     })
+
+
+@app.route('/api/reports/fda-temperature', methods=['GET'])
+@login_required
+def generate_fda_report():
+    """Generate FDA-compliant temperature monitoring report as PDF"""
+    if not PDF_AVAILABLE:
+        return jsonify({'error': 'PDF generation not available. Install reportlab package.'}), 500
+
+    # Get date range from query params
+    days = request.args.get('days', 7, type=int)
+    days = min(days, 365)  # Max 1 year
+
+    since = datetime.utcnow() - timedelta(days=days)
+    end_date = datetime.utcnow()
+
+    # Get all sensor readings in date range
+    readings = SensorReading.query.filter(
+        SensorReading.recorded_at > since
+    ).order_by(SensorReading.device_name, SensorReading.recorded_at).all()
+
+    # Group readings by device
+    devices = {}
+    for reading in readings:
+        if reading.device_name not in devices:
+            devices[reading.device_name] = {
+                'readings': [],
+                'device_id': reading.device_id,
+                'device_type': reading.device_type
+            }
+        devices[reading.device_name]['readings'].append(reading)
+
+    # Create PDF in memory
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.75*inch,
+        leftMargin=0.75*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch
+    )
+
+    # Build the document
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=6,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#8B4513')
+    )
+
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Normal'],
+        fontSize=14,
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#666666')
+    )
+
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceBefore=20,
+        spaceAfter=10,
+        textColor=colors.HexColor('#8B4513')
+    )
+
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=6
+    )
+
+    # Check for logo
+    logo_path = os.path.join(app.static_folder, 'logo.png')
+    if os.path.exists(logo_path):
+        try:
+            logo = Image(logo_path, width=1.5*inch, height=1.5*inch)
+            logo.hAlign = 'CENTER'
+            story.append(logo)
+            story.append(Spacer(1, 0.25*inch))
+        except Exception:
+            pass
+
+    # Header
+    story.append(Paragraph("3 STRANDS CATTLE CO.", title_style))
+    story.append(Paragraph("FDA Temperature Monitoring Compliance Report", subtitle_style))
+
+    # Report info
+    report_date = datetime.now().strftime('%B %d, %Y at %I:%M %p')
+    story.append(Paragraph(f"<b>Report Generated:</b> {report_date}", normal_style))
+    story.append(Paragraph(f"<b>Report Period:</b> {since.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')} ({days} days)", normal_style))
+    story.append(Paragraph(f"<b>Total Readings:</b> {len(readings)}", normal_style))
+    story.append(Paragraph(f"<b>Devices Monitored:</b> {len(devices)}", normal_style))
+    story.append(Spacer(1, 0.25*inch))
+
+    # Compliance statement
+    story.append(Paragraph("COMPLIANCE STATEMENT", heading_style))
+    compliance_text = """This report documents temperature monitoring data collected from YoLink sensors
+    installed at 3 Strands Cattle Co. facilities. Temperature readings are automatically recorded
+    and stored to ensure compliance with FDA Food Safety Modernization Act (FSMA) requirements
+    for cold chain monitoring and documentation."""
+    story.append(Paragraph(compliance_text, normal_style))
+    story.append(Spacer(1, 0.25*inch))
+
+    # Device summaries
+    for device_name, device_data in devices.items():
+        device_readings = device_data['readings']
+
+        if not device_readings:
+            continue
+
+        story.append(Paragraph(f"DEVICE: {device_name.upper()}", heading_style))
+
+        # Calculate statistics
+        temps = [r.temperature for r in device_readings if r.temperature is not None]
+        if temps:
+            min_temp = min(temps)
+            max_temp = max(temps)
+            avg_temp = sum(temps) / len(temps)
+
+            stats_data = [
+                ['Statistic', 'Value'],
+                ['Device ID', device_data['device_id']],
+                ['Device Type', device_data['device_type']],
+                ['Total Readings', str(len(device_readings))],
+                ['First Reading', device_readings[0].recorded_at.strftime('%Y-%m-%d %H:%M:%S UTC')],
+                ['Last Reading', device_readings[-1].recorded_at.strftime('%Y-%m-%d %H:%M:%S UTC')],
+                ['Minimum Temperature', f"{min_temp:.1f}°F"],
+                ['Maximum Temperature', f"{max_temp:.1f}°F"],
+                ['Average Temperature', f"{avg_temp:.1f}°F"],
+            ]
+
+            stats_table = Table(stats_data, colWidths=[2.5*inch, 4*inch])
+            stats_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8B4513')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#FFF8DC')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#D2B48C')),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            story.append(stats_table)
+
+        # Sample of readings (last 20)
+        story.append(Spacer(1, 0.15*inch))
+        story.append(Paragraph("<b>Recent Temperature Readings (Sample)</b>", normal_style))
+
+        sample_readings = device_readings[-20:] if len(device_readings) > 20 else device_readings
+        readings_data = [['Date/Time (UTC)', 'Temperature', 'Humidity']]
+
+        for reading in sample_readings:
+            temp_str = f"{reading.temperature:.1f}°F" if reading.temperature else "N/A"
+            humidity_str = f"{reading.humidity}%" if reading.humidity and reading.humidity > 0 else "N/A"
+            readings_data.append([
+                reading.recorded_at.strftime('%Y-%m-%d %H:%M'),
+                temp_str,
+                humidity_str
+            ])
+
+        readings_table = Table(readings_data, colWidths=[2.5*inch, 2*inch, 2*inch])
+        readings_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D2691E')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#FFFAF0')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#DEB887')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFAF0'), colors.HexColor('#FFF8DC')]),
+        ]))
+        story.append(readings_table)
+        story.append(Spacer(1, 0.25*inch))
+
+    # Footer
+    story.append(Spacer(1, 0.5*inch))
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=8,
+        alignment=TA_CENTER,
+        textColor=colors.gray
+    )
+    story.append(Paragraph("─" * 80, footer_style))
+    story.append(Paragraph("This report was automatically generated by 3 Strands Cattle Co. Ranch Command Center", footer_style))
+    story.append(Paragraph("For questions regarding this report, please contact ranch management.", footer_style))
+
+    # Build the PDF
+    doc.build(story)
+
+    # Return PDF
+    buffer.seek(0)
+    filename = f"FDA_Temperature_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+            'Content-Type': 'application/pdf'
+        }
+    )
 
 
 # =============================================================================

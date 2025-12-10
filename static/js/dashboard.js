@@ -323,7 +323,7 @@ function renderSensors(devices) {
                 </span>
             </div>
             <h4 class="sensor-name">${device.name || 'Unknown Sensor'}</h4>
-            <p class="sensor-type">${device.type || 'Unknown Type'}</p>
+            <p class="sensor-type">${getSensorTypeLabel(device.type)}</p>
             <div class="sensor-readings">
                 ${formatSensorReadings(state, device.type)}
             </div>
@@ -348,11 +348,46 @@ function getSensorIcon(type) {
     return icons[type] || 'fa-microchip';
 }
 
+function getSensorTypeLabel(type) {
+    const labels = {
+        'THSensor': 'Temp Sensor',
+        'MotionSensor': 'Motion Sensor',
+        'DoorSensor': 'Door Sensor',
+        'LeakSensor': 'Leak Sensor',
+        'Hub': 'Hub',
+        'Outlet': 'Smart Outlet',
+        'Switch': 'Smart Switch',
+        'Siren': 'Siren',
+        'Lock': 'Smart Lock',
+        'GarageDoor': 'Garage Door'
+    };
+    return labels[type] || type;
+}
+
+function convertBatteryLevel(level) {
+    // YoLink returns battery as 0-4 scale, convert to percentage
+    const percentages = {
+        4: 100,
+        3: 75,
+        2: 50,
+        1: 25,
+        0: 0
+    };
+    return percentages[level] !== undefined ? percentages[level] : level;
+}
+
 function formatSensorReadings(state, type) {
     let html = '';
 
     if (state.temperature !== undefined) {
-        const tempF = (state.temperature * 9/5) + 32;
+        // Check if sensor is in Fahrenheit mode (mode: "f") or Celsius (mode: "c")
+        // If already in Fahrenheit, don't convert
+        let tempF;
+        if (state.mode === 'f') {
+            tempF = state.temperature;
+        } else {
+            tempF = (state.temperature * 9/5) + 32;
+        }
         html += `
             <div class="reading">
                 <span class="reading-value">${tempF.toFixed(1)}°F</span>
@@ -361,7 +396,7 @@ function formatSensorReadings(state, type) {
         `;
     }
 
-    if (state.humidity !== undefined) {
+    if (state.humidity !== undefined && state.humidity > 0) {
         html += `
             <div class="reading">
                 <span class="reading-value">${state.humidity}%</span>
@@ -371,9 +406,10 @@ function formatSensorReadings(state, type) {
     }
 
     if (state.battery !== undefined) {
+        const batteryPercent = convertBatteryLevel(state.battery);
         html += `
             <div class="reading">
-                <span class="reading-value">${state.battery}%</span>
+                <span class="reading-value">${batteryPercent}%</span>
                 <span class="reading-label">Battery</span>
             </div>
         `;
@@ -886,7 +922,8 @@ function showSensorModal(deviceId) {
     }
 
     if (state.battery !== undefined) {
-        document.getElementById('currentBattery').textContent = `${state.battery}%`;
+        const batteryPercent = convertBatteryLevel(state.battery);
+        document.getElementById('currentBattery').textContent = `${batteryPercent}%`;
     } else {
         document.getElementById('currentBattery').textContent = '--';
     }
@@ -917,6 +954,34 @@ function closeSensorModal() {
         humidityChart.destroy();
         humidityChart = null;
     }
+}
+
+// =============================================================================
+// FDA Report Functions
+// =============================================================================
+
+function showFdaReportModal() {
+    document.getElementById('fdaReportModal').classList.add('show');
+}
+
+function closeFdaReportModal() {
+    document.getElementById('fdaReportModal').classList.remove('show');
+}
+
+function downloadFdaReport() {
+    const days = document.getElementById('fdaReportDays').value;
+    showToast('Generating FDA report...', 'info');
+
+    // Create a temporary link to trigger the download
+    const link = document.createElement('a');
+    link.href = `/api/reports/fda-temperature?days=${days}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    closeFdaReportModal();
+    showToast('FDA report download started!', 'success');
 }
 
 async function loadSensorHistory(hours) {
