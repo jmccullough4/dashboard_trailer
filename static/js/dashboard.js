@@ -475,21 +475,22 @@ function refreshSensors() {
     loadSensors(false);
 }
 
-// Update hub status in network diagram
+// Update hub status in sensors card
 function updateHubStatus(online) {
     const hubStatus = document.getElementById('hubStatus');
     if (hubStatus) {
         hubStatus.textContent = online ? 'Connected' : 'Offline';
-        hubStatus.className = 'hub-status' + (online ? '' : ' offline');
+        hubStatus.className = 'hub-status-badge' + (online ? ' online' : ' offline');
     }
 }
 
-// Render network diagram
+// Render sensors in card format
 function renderNetworkDiagram(devices) {
-    const connections = document.getElementById('networkConnections');
-    if (!connections) return;
+    const sensorsList = document.getElementById('sensorsList');
+    const sensorsLoading = document.getElementById('sensorsLoading');
+    const sensorsEmpty = document.getElementById('sensorsEmpty');
 
-    connections.innerHTML = '';
+    if (!sensorsList) return;
 
     // Find hub and sensors
     const hub = devices.find(d => d.type === 'Hub');
@@ -498,58 +499,65 @@ function renderNetworkDiagram(devices) {
     // Update hub status
     updateHubStatus(hub ? hub.online : false);
 
-    // Find the coldest temperature sensor (likely the freezer)
-    let coldestTemp = null;
-    let coldestSensor = null;
+    // Hide loading
+    if (sensorsLoading) sensorsLoading.style.display = 'none';
 
-    // Create sensor nodes
+    // Check if we have sensors
+    if (sensors.length === 0) {
+        sensorsList.style.display = 'none';
+        if (sensorsEmpty) sensorsEmpty.style.display = 'flex';
+        return;
+    }
+
+    // Show sensors list
+    sensorsList.style.display = 'flex';
+    if (sensorsEmpty) sensorsEmpty.style.display = 'none';
+    sensorsList.innerHTML = '';
+
+    // Create sensor items
     sensors.forEach(device => {
         const state = device.state || {};
         const isOnline = device.online !== false;
         const temp = getDisplayTemperature(state.temperature, state.mode);
         const lastUpdate = device.reportAt ? formatTimeAgo(device.reportAt) : 'Unknown';
+        const unit = useCelsius ? '°C' : '°F';
 
-        // Track coldest temperature for quick stats
-        if (state.temperature !== undefined && state.temperature !== null) {
-            if (coldestTemp === null || state.temperature < coldestTemp) {
-                coldestTemp = state.temperature;
-                coldestSensor = device;
-            }
+        // Battery level and class
+        const batteryPercent = convertBatteryLevel(state.battery);
+        let batteryClass = '';
+        if (batteryPercent !== undefined) {
+            if (batteryPercent <= 10) batteryClass = 'critical';
+            else if (batteryPercent <= 25) batteryClass = 'low';
         }
 
-        const node = document.createElement('div');
-        node.className = `sensor-node ${isOnline ? 'online' : ''}`;
-        node.onclick = () => showSensorModal(device.deviceId);
+        const item = document.createElement('div');
+        item.className = `sensor-item ${isOnline ? '' : 'offline'}`;
+        item.onclick = () => showSensorModal(device.deviceId);
 
-        node.innerHTML = `
-            <div class="sensor-node-icon">
+        item.innerHTML = `
+            <div class="sensor-item-icon">
                 <i class="fas fa-thermometer-half"></i>
             </div>
-            <span class="sensor-node-name">${device.name}</span>
-            <span class="sensor-node-temp">${temp !== null ? temp + (useCelsius ? '°C' : '°F') : '--'}</span>
-            <span class="sensor-node-status">${isOnline ? 'Online' : 'Offline'}</span>
-            <span class="sensor-node-updated">Updated: ${lastUpdate}</span>
+            <div class="sensor-item-info">
+                <div class="sensor-item-name">${device.name}</div>
+                <div class="sensor-item-status">
+                    <span class="status-dot"></span>
+                    <span>${isOnline ? 'Online' : 'Offline'} • ${lastUpdate}</span>
+                </div>
+            </div>
+            <div class="sensor-item-readings">
+                <div class="sensor-temp">${temp !== null ? temp + unit : '--'}</div>
+                ${state.humidity !== undefined && state.humidity > 0 ? `
+                    <div class="sensor-humidity"><i class="fas fa-tint"></i> ${state.humidity}%</div>
+                ` : ''}
+                ${batteryPercent !== undefined ? `
+                    <div class="sensor-battery ${batteryClass}"><i class="fas fa-battery-half"></i> ${batteryPercent}%</div>
+                ` : ''}
+            </div>
         `;
 
-        connections.appendChild(node);
+        sensorsList.appendChild(item);
     });
-
-    // Update quick stats panel with temperature
-    updateQuickStatsTemp(coldestTemp);
-}
-
-// Update quick stats temperature display
-function updateQuickStatsTemp(tempC) {
-    const quickTempValue = document.getElementById('quickTempValue');
-    if (quickTempValue) {
-        if (tempC !== null && tempC !== undefined) {
-            const displayTemp = useCelsius ? tempC : (tempC * 9/5) + 32;
-            const unit = useCelsius ? '°C' : '°F';
-            quickTempValue.textContent = `${displayTemp.toFixed(1)}${unit}`;
-        } else {
-            quickTempValue.textContent = '--';
-        }
-    }
 }
 
 // Get display temperature based on unit preference
@@ -1607,41 +1615,6 @@ function updateEcoFlowDisplay(data) {
         }
     }
     if (batteryPercent) batteryPercent.textContent = `${soc}%`;
-
-    // Update Quick Stats Panel - Battery %
-    const quickPowerValue = document.getElementById('quickPowerValue');
-    if (quickPowerValue) {
-        quickPowerValue.textContent = `${soc}%`;
-    }
-
-    // Update Quick Stats Panel - Power Flow
-    const quickFlowValue = document.getElementById('quickFlowValue');
-    if (quickFlowValue) {
-        const wattsIn = data.watts_in || 0;
-        const wattsOut = data.watts_out || 0;
-        if (wattsIn > 0) {
-            quickFlowValue.textContent = `+${wattsIn}W`;
-            quickFlowValue.style.color = '#00d4aa';
-        } else if (wattsOut > 0) {
-            quickFlowValue.textContent = `-${wattsOut}W`;
-            quickFlowValue.style.color = '#ffa500';
-        } else {
-            quickFlowValue.textContent = '0W';
-            quickFlowValue.style.color = '';
-        }
-    }
-
-    // Update Quick Stats Panel - Battery Temp
-    const quickBatteryTempValue = document.getElementById('quickBatteryTempValue');
-    if (quickBatteryTempValue) {
-        if (data.battery_temp !== null && data.battery_temp !== undefined) {
-            const tempValue = useCelsius ? data.battery_temp : (data.battery_temp * 9/5) + 32;
-            const unit = useCelsius ? '°C' : '°F';
-            quickBatteryTempValue.textContent = `${tempValue.toFixed(1)}${unit}`;
-        } else {
-            quickBatteryTempValue.textContent = '--';
-        }
-    }
 
     // State and time
     const stateEl = document.getElementById('ecoflowState');

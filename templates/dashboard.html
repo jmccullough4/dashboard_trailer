@@ -122,59 +122,35 @@
                     </div>
                 </div>
 
-                <!-- Unified Quick Stats Panel -->
-                <div class="quick-stats-panel" id="quickStatsPanel">
-                    <div class="quick-stat" id="quickStatTemp">
-                        <div class="quick-stat-icon temp">
-                            <i class="fas fa-thermometer-half"></i>
-                        </div>
-                        <div class="quick-stat-info">
-                            <span class="quick-stat-value" id="quickTempValue">--</span>
-                            <span class="quick-stat-label">Freezer Temp</span>
-                        </div>
-                    </div>
-                    <div class="quick-stat" id="quickStatPower">
-                        <div class="quick-stat-icon power">
-                            <i class="fas fa-car-battery"></i>
-                        </div>
-                        <div class="quick-stat-info">
-                            <span class="quick-stat-value" id="quickPowerValue">--</span>
-                            <span class="quick-stat-label">Battery</span>
-                        </div>
-                    </div>
-                    <div class="quick-stat" id="quickStatPowerFlow">
-                        <div class="quick-stat-icon flow">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <div class="quick-stat-info">
-                            <span class="quick-stat-value" id="quickFlowValue">--</span>
-                            <span class="quick-stat-label">Power Flow</span>
-                        </div>
-                    </div>
-                    <div class="quick-stat" id="quickStatBatteryTemp">
-                        <div class="quick-stat-icon battery-temp">
-                            <i class="fas fa-temperature-high"></i>
-                        </div>
-                        <div class="quick-stat-info">
-                            <span class="quick-stat-value" id="quickBatteryTempValue">--</span>
-                            <span class="quick-stat-label">Battery Temp</span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Unified Sensor & Power Grid -->
                 <div class="sensor-power-grid">
-                    <!-- Network Diagram View -->
-                    <div class="network-diagram" id="networkDiagram">
-                        <div class="network-hub" id="networkHub">
-                            <div class="hub-icon">
-                                <i class="fas fa-wifi"></i>
+                    <!-- Temperature Sensors Card -->
+                    <div class="sensors-card" id="sensorsCard">
+                        <div class="sensors-card-header">
+                            <div class="sensors-card-title">
+                                <i class="fas fa-thermometer-half"></i>
+                                <span>Temperature Sensors</span>
                             </div>
-                            <span class="hub-label">WiFi Hub</span>
-                            <span class="hub-status" id="hubStatus">Connecting...</span>
+                            <div class="sensors-card-status">
+                                <span class="hub-status-badge" id="hubStatus">Connecting...</span>
+                            </div>
                         </div>
-                        <div class="network-connections" id="networkConnections">
-                            <!-- Sensor nodes will be added here dynamically -->
+
+                        <!-- Loading state -->
+                        <div class="sensors-loading" id="sensorsLoading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading sensors...</p>
+                        </div>
+
+                        <!-- Sensors list -->
+                        <div class="sensors-list" id="sensorsList" style="display: none;">
+                            <!-- Sensor items will be added here dynamically -->
+                        </div>
+
+                        <!-- No sensors state -->
+                        <div class="sensors-empty" id="sensorsEmpty" style="display: none;">
+                            <i class="fas fa-satellite-dish"></i>
+                            <p>No sensors found</p>
                         </div>
                     </div>
 
@@ -269,29 +245,6 @@
                                 </div>
                             </div>
 
-                            <!-- Controls (admin only) -->
-                            {% if user.is_admin %}
-                            <div class="compact-controls">
-                                <div class="control-item">
-                                    <span>AC</span>
-                                    <button class="toggle-btn small" id="ecoflowAcToggle" onclick="toggleEcoFlowAc()">
-                                        <span class="toggle-slider"></span>
-                                    </button>
-                                </div>
-                                <div class="control-item">
-                                    <span>DC</span>
-                                    <button class="toggle-btn small" id="ecoflowDcToggle" onclick="toggleEcoFlowDc()">
-                                        <span class="toggle-slider"></span>
-                                    </button>
-                                </div>
-                                <div class="control-item">
-                                    <span>XB</span>
-                                    <button class="toggle-btn small" id="ecoflowXboostToggle" onclick="toggleEcoFlowXboost()">
-                                        <span class="toggle-slider"></span>
-                                    </button>
-                                </div>
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
