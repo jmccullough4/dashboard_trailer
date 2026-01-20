@@ -624,15 +624,28 @@ input:checked + .slider:before {
     align-items: center;
     gap: 8px;
     justify-content: center;
-    padding: 10px;
+    padding: 12px 20px;
     color: var(--text-muted);
     font-size: 12px;
-    border-top: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
     margin-top: 20px;
 }
 
 .auto-refresh-status i {
     color: var(--primary-gold);
+    animation: pulse 2s infinite;
+}
+
+.auto-refresh-status #refreshCountdown {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 600;
+    color: var(--primary-gold);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
 }
 
 /* =============================================================================
@@ -2375,6 +2388,8 @@ select.form-input {
     padding: 20px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .sensors-card::before {
@@ -2451,6 +2466,7 @@ select.form-input {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    flex: 1;
 }
 
 .sensor-item {
@@ -2581,7 +2597,7 @@ select.form-input {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 25px;
-    align-items: start;
+    align-items: stretch;
 }
 
 /* Power Station Card */
@@ -2592,6 +2608,8 @@ select.form-input {
     padding: 20px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .power-station-card::before {
@@ -2656,12 +2674,24 @@ select.form-input {
 .power-station-card .ecoflow-unconfigured {
     min-height: 150px;
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .power-station-card .ecoflow-loading i,
 .power-station-card .ecoflow-unconfigured i {
     font-size: 32px;
     margin-bottom: 10px;
+    color: var(--primary-gold);
+}
+
+/* EcoFlow Dashboard Layout */
+.ecoflow-dashboard {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 /* Compact Battery Gauge */
@@ -2813,30 +2843,41 @@ select.form-input {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-    margin-bottom: 12px;
+    margin-top: auto;
+    padding-top: 15px;
+    border-top: 1px solid rgba(212, 168, 83, 0.1);
 }
 
 .compact-stat {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
-    padding: 10px 8px;
+    gap: 6px;
+    padding: 12px 8px;
     background: rgba(0, 0, 0, 0.2);
-    border-radius: 6px;
+    border-radius: 8px;
     text-align: center;
 }
 
 .compact-stat i {
-    font-size: 14px;
+    font-size: 16px;
     color: var(--primary-gold);
 }
 
-.compact-stat span {
+.compact-stat .stat-value {
     font-family: 'Orbitron', sans-serif;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--text-light);
+}
+
+.compact-stat .stat-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Compact Controls */

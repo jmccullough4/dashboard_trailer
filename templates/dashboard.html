@@ -221,27 +221,25 @@
 
                             <!-- Solar input (if available) -->
                             <div class="solar-input" id="ecoflowSolarInput" style="display: none;">
-                                <i class="fas fa-sun"></i> <span>0W</span>
-                            </div>
-
-                            <!-- AC Output indicator -->
-                            <div class="ac-output-row">
-                                <span id="ecoflowAcOutput"><i class="fas fa-plug"></i> AC: <span>0W</span></span>
+                                <i class="fas fa-sun"></i> Solar: <span>0W</span>
                             </div>
 
                             <!-- Compact Stats -->
                             <div class="compact-stats">
                                 <div class="compact-stat">
                                     <i class="fas fa-thermometer-half"></i>
-                                    <span id="ecoflowBatteryTemp">--</span>
+                                    <span class="stat-value" id="ecoflowBatteryTemp">--</span>
+                                    <span class="stat-label">Batt Temp</span>
                                 </div>
                                 <div class="compact-stat">
                                     <i class="fas fa-bolt"></i>
-                                    <span id="ecoflowFastCharge">--</span>
+                                    <span class="stat-value" id="ecoflowFastCharge">--</span>
+                                    <span class="stat-label">Max Input</span>
                                 </div>
                                 <div class="compact-stat">
                                     <i class="fas fa-shield-alt"></i>
-                                    <span id="ecoflowBackupReserve">--</span>
+                                    <span class="stat-value" id="ecoflowBackupReserve">--</span>
+                                    <span class="stat-label">Reserve</span>
                                 </div>
                             </div>
 
