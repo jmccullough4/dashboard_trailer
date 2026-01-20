@@ -122,149 +122,182 @@
                     </div>
                 </div>
 
-                <!-- Network Diagram View -->
-                <div class="network-diagram" id="networkDiagram">
-                    <div class="network-hub" id="networkHub">
-                        <div class="hub-icon">
-                            <i class="fas fa-wifi"></i>
+                <!-- Unified Quick Stats Panel -->
+                <div class="quick-stats-panel" id="quickStatsPanel">
+                    <div class="quick-stat" id="quickStatTemp">
+                        <div class="quick-stat-icon temp">
+                            <i class="fas fa-thermometer-half"></i>
                         </div>
-                        <span class="hub-label">WiFi Hub</span>
-                        <span class="hub-status" id="hubStatus">Connecting...</span>
+                        <div class="quick-stat-info">
+                            <span class="quick-stat-value" id="quickTempValue">--</span>
+                            <span class="quick-stat-label">Freezer Temp</span>
+                        </div>
                     </div>
-                    <div class="network-connections" id="networkConnections">
-                        <!-- Sensor nodes will be added here dynamically -->
+                    <div class="quick-stat" id="quickStatPower">
+                        <div class="quick-stat-icon power">
+                            <i class="fas fa-car-battery"></i>
+                        </div>
+                        <div class="quick-stat-info">
+                            <span class="quick-stat-value" id="quickPowerValue">--</span>
+                            <span class="quick-stat-label">Battery</span>
+                        </div>
+                    </div>
+                    <div class="quick-stat" id="quickStatPowerFlow">
+                        <div class="quick-stat-icon flow">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="quick-stat-info">
+                            <span class="quick-stat-value" id="quickFlowValue">--</span>
+                            <span class="quick-stat-label">Power Flow</span>
+                        </div>
+                    </div>
+                    <div class="quick-stat" id="quickStatBatteryTemp">
+                        <div class="quick-stat-icon battery-temp">
+                            <i class="fas fa-temperature-high"></i>
+                        </div>
+                        <div class="quick-stat-info">
+                            <span class="quick-stat-value" id="quickBatteryTempValue">--</span>
+                            <span class="quick-stat-label">Battery Temp</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Hidden sensors grid for fallback/loading states -->
-                <div class="sensors-grid" id="sensorsGrid" style="display: none;"></div>
-
-                <!-- EcoFlow Power Station (integrated with sensors) -->
-                <div class="ecoflow-section">
-                    <div class="ecoflow-section-header">
-                        <h4><i class="fas fa-car-battery"></i> Power Station</h4>
-                        {% if user.is_admin %}
-                        <button class="btn btn-sm btn-secondary" onclick="showEcoFlowConfigModal()">
-                            <i class="fas fa-cog"></i>
-                        </button>
-                        {% endif %}
+                <!-- Unified Sensor & Power Grid -->
+                <div class="sensor-power-grid">
+                    <!-- Network Diagram View -->
+                    <div class="network-diagram" id="networkDiagram">
+                        <div class="network-hub" id="networkHub">
+                            <div class="hub-icon">
+                                <i class="fas fa-wifi"></i>
+                            </div>
+                            <span class="hub-label">WiFi Hub</span>
+                            <span class="hub-status" id="hubStatus">Connecting...</span>
+                        </div>
+                        <div class="network-connections" id="networkConnections">
+                            <!-- Sensor nodes will be added here dynamically -->
+                        </div>
                     </div>
 
-                    <div class="ecoflow-container" id="ecoflowContainer">
+                    <!-- Compact Power Station Card -->
+                    <div class="power-station-card" id="powerStationCard">
+                        <div class="power-card-header">
+                            <div class="power-card-title">
+                                <i class="fas fa-car-battery"></i>
+                                <span id="ecoflowDeviceName">Power Station</span>
+                            </div>
+                            <div class="power-card-status">
+                                <span class="ecoflow-status" id="ecoflowStatus">--</span>
+                                {% if user.is_admin %}
+                                <button class="btn btn-sm btn-icon" onclick="showEcoFlowConfigModal()" title="Configure">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+
                         <!-- Loading state -->
                         <div class="ecoflow-loading" id="ecoflowLoading">
                             <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading power station status...</p>
+                            <p>Loading...</p>
                         </div>
 
                         <!-- Not configured state -->
                         <div class="ecoflow-unconfigured" id="ecoflowUnconfigured" style="display: none;">
                             <i class="fas fa-plug"></i>
-                            <h4>EcoFlow Not Configured</h4>
-                            <p>Configure your EcoFlow Delta 2 Max to monitor freezer power.</p>
+                            <p>Not Configured</p>
                             {% if user.is_admin %}
-                            <button class="btn btn-primary" onclick="showEcoFlowConfigModal()">
-                                <i class="fas fa-cog"></i> Configure EcoFlow
+                            <button class="btn btn-sm btn-primary" onclick="showEcoFlowConfigModal()">
+                                <i class="fas fa-cog"></i> Setup
                             </button>
                             {% endif %}
                         </div>
 
                         <!-- Main power display -->
                         <div class="ecoflow-dashboard" id="ecoflowDashboard" style="display: none;">
-                            <!-- Device header -->
-                            <div class="ecoflow-header">
-                                <div class="ecoflow-device-info">
-                                    <div>
-                                        <h4 id="ecoflowDeviceName">Delta 2 Max</h4>
-                                        <span class="ecoflow-status" id="ecoflowStatus">Online</span>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Battery gauge -->
-                            <div class="ecoflow-battery-container">
-                                <div class="ecoflow-battery-gauge">
-                                    <div class="battery-level" id="ecoflowBatteryLevel" style="width: 0%"></div>
-                                    <div class="battery-percentage" id="ecoflowBatteryPercent">0%</div>
-                                </div>
-                                <div class="ecoflow-battery-info">
-                                    <span class="ecoflow-state" id="ecoflowState">
-                                        <i class="fas fa-circle"></i> Idle
-                                    </span>
-                                    <span class="ecoflow-time" id="ecoflowTime">--</span>
-                                </div>
+                            <div class="compact-battery-gauge">
+                                <div class="battery-level" id="ecoflowBatteryLevel" style="width: 0%"></div>
+                                <div class="battery-percentage" id="ecoflowBatteryPercent">0%</div>
+                            </div>
+                            <div class="battery-state-row">
+                                <span class="ecoflow-state" id="ecoflowState">
+                                    <i class="fas fa-circle"></i> Idle
+                                </span>
+                                <span class="ecoflow-time" id="ecoflowTime">--</span>
                             </div>
 
-                            <!-- Power flow -->
-                            <div class="ecoflow-power-flow">
-                                <div class="power-input">
-                                    <div class="power-label">Input</div>
-                                    <div class="power-value" id="ecoflowInputWatts">0W</div>
-                                    <div class="power-sources">
-                                        <span id="ecoflowSolarInput" style="display: none;">
-                                            <i class="fas fa-sun"></i> <span>0W</span>
-                                        </span>
-                                    </div>
+                            <!-- Compact Power flow -->
+                            <div class="compact-power-flow">
+                                <div class="power-in">
+                                    <i class="fas fa-arrow-down"></i>
+                                    <span id="ecoflowInputWatts">0W</span>
+                                    <small>In</small>
                                 </div>
                                 <div class="power-battery-icon">
                                     <i class="fas fa-battery-three-quarters" id="ecoflowBatteryIcon"></i>
                                 </div>
-                                <div class="power-output">
-                                    <div class="power-label">Output</div>
-                                    <div class="power-value" id="ecoflowOutputWatts">0W</div>
-                                    <div class="power-outputs">
-                                        <span id="ecoflowAcOutput">
-                                            <i class="fas fa-plug"></i> AC: <span>0W</span>
-                                        </span>
-                                    </div>
+                                <div class="power-out">
+                                    <i class="fas fa-arrow-up"></i>
+                                    <span id="ecoflowOutputWatts">0W</span>
+                                    <small>Out</small>
+                                </div>
+                            </div>
+
+                            <!-- Solar input (if available) -->
+                            <div class="solar-input" id="ecoflowSolarInput" style="display: none;">
+                                <i class="fas fa-sun"></i> <span>0W</span>
+                            </div>
+
+                            <!-- AC Output indicator -->
+                            <div class="ac-output-row">
+                                <span id="ecoflowAcOutput"><i class="fas fa-plug"></i> AC: <span>0W</span></span>
+                            </div>
+
+                            <!-- Compact Stats -->
+                            <div class="compact-stats">
+                                <div class="compact-stat">
+                                    <i class="fas fa-thermometer-half"></i>
+                                    <span id="ecoflowBatteryTemp">--</span>
+                                </div>
+                                <div class="compact-stat">
+                                    <i class="fas fa-bolt"></i>
+                                    <span id="ecoflowFastCharge">--</span>
+                                </div>
+                                <div class="compact-stat">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <span id="ecoflowBackupReserve">--</span>
                                 </div>
                             </div>
 
                             <!-- Controls (admin only) -->
                             {% if user.is_admin %}
-                            <div class="ecoflow-controls">
-                                <div class="ecoflow-control-group">
-                                    <label>AC Output</label>
-                                    <button class="toggle-btn" id="ecoflowAcToggle" onclick="toggleEcoFlowAc()">
+                            <div class="compact-controls">
+                                <div class="control-item">
+                                    <span>AC</span>
+                                    <button class="toggle-btn small" id="ecoflowAcToggle" onclick="toggleEcoFlowAc()">
                                         <span class="toggle-slider"></span>
                                     </button>
                                 </div>
-                                <div class="ecoflow-control-group">
-                                    <label>DC Output</label>
-                                    <button class="toggle-btn" id="ecoflowDcToggle" onclick="toggleEcoFlowDc()">
+                                <div class="control-item">
+                                    <span>DC</span>
+                                    <button class="toggle-btn small" id="ecoflowDcToggle" onclick="toggleEcoFlowDc()">
                                         <span class="toggle-slider"></span>
                                     </button>
                                 </div>
-                                <div class="ecoflow-control-group">
-                                    <label>X-Boost</label>
-                                    <button class="toggle-btn" id="ecoflowXboostToggle" onclick="toggleEcoFlowXboost()">
+                                <div class="control-item">
+                                    <span>XB</span>
+                                    <button class="toggle-btn small" id="ecoflowXboostToggle" onclick="toggleEcoFlowXboost()">
                                         <span class="toggle-slider"></span>
                                     </button>
                                 </div>
                             </div>
                             {% endif %}
-
-                            <!-- Stats grid -->
-                            <div class="ecoflow-stats">
-                                <div class="ecoflow-stat">
-                                    <i class="fas fa-thermometer-half"></i>
-                                    <span class="stat-label">Battery Temp</span>
-                                    <span class="stat-value" id="ecoflowBatteryTemp">--</span>
-                                </div>
-                                <div class="ecoflow-stat">
-                                    <i class="fas fa-bolt"></i>
-                                    <span class="stat-label">Fast Charge</span>
-                                    <span class="stat-value" id="ecoflowFastCharge">--</span>
-                                </div>
-                                <div class="ecoflow-stat">
-                                    <i class="fas fa-shield-alt"></i>
-                                    <span class="stat-label">Backup Reserve</span>
-                                    <span class="stat-value" id="ecoflowBackupReserve">--</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Hidden sensors grid for fallback/loading states -->
+                <div class="sensors-grid" id="sensorsGrid" style="display: none;"></div>
 
                 <div class="auto-refresh-status">
                     <i class="fas fa-clock"></i>
