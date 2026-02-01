@@ -2590,6 +2590,95 @@ select.form-input {
 }
 
 /* =============================================================================
+   Power Stations Container (Multi-Device)
+   ============================================================================= */
+
+.power-stations-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Add Power Station Card */
+.power-station-card.add-card {
+    border: 2px dashed rgba(212, 168, 83, 0.3);
+    background: transparent;
+    cursor: pointer;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.power-station-card.add-card::before {
+    display: none;
+}
+
+.power-station-card.add-card:hover {
+    border-color: var(--primary-gold);
+    background: rgba(212, 168, 83, 0.05);
+}
+
+.add-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+}
+
+.add-card-content i {
+    font-size: 32px;
+    color: var(--primary-gold);
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
+}
+
+.power-station-card.add-card:hover .add-card-content i {
+    opacity: 1;
+}
+
+.add-card-content span {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Error State */
+.ecoflow-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 30px 20px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.ecoflow-error-state i {
+    font-size: 28px;
+    color: var(--neon-orange);
+}
+
+.ecoflow-error-state p {
+    font-size: 12px;
+}
+
+/* Remove button */
+.btn-danger-icon {
+    color: var(--neon-red) !important;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.btn-danger-icon:hover {
+    opacity: 1;
+}
+
+/* =============================================================================
    Unified Sensor & Power Grid
    ============================================================================= */
 
@@ -2926,6 +3015,7 @@ select.form-input {
     }
 
     .sensors-card,
+    .power-stations-container,
     .power-station-card {
         max-width: 100%;
     }

@@ -154,95 +154,13 @@
                         </div>
                     </div>
 
-                    <!-- Compact Power Station Card -->
-                    <div class="power-station-card" id="powerStationCard">
-                        <div class="power-card-header">
-                            <div class="power-card-title">
-                                <i class="fas fa-car-battery"></i>
-                                <span id="ecoflowDeviceName">Power Station</span>
+                    <!-- Power Stations Container (dynamically rendered) -->
+                    <div class="power-stations-container" id="powerStationsContainer">
+                        <div class="power-station-card">
+                            <div class="ecoflow-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Loading power stations...</p>
                             </div>
-                            <div class="power-card-status">
-                                <span class="ecoflow-status" id="ecoflowStatus">--</span>
-                                {% if user.is_admin %}
-                                <button class="btn btn-sm btn-icon" onclick="showEcoFlowConfigModal()" title="Configure">
-                                    <i class="fas fa-cog"></i>
-                                </button>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Loading state -->
-                        <div class="ecoflow-loading" id="ecoflowLoading">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading...</p>
-                        </div>
-
-                        <!-- Not configured state -->
-                        <div class="ecoflow-unconfigured" id="ecoflowUnconfigured" style="display: none;">
-                            <i class="fas fa-plug"></i>
-                            <p>Not Configured</p>
-                            {% if user.is_admin %}
-                            <button class="btn btn-sm btn-primary" onclick="showEcoFlowConfigModal()">
-                                <i class="fas fa-cog"></i> Setup
-                            </button>
-                            {% endif %}
-                        </div>
-
-                        <!-- Main power display -->
-                        <div class="ecoflow-dashboard" id="ecoflowDashboard" style="display: none;">
-                            <!-- Battery gauge -->
-                            <div class="compact-battery-gauge">
-                                <div class="battery-level" id="ecoflowBatteryLevel" style="width: 0%"></div>
-                                <div class="battery-percentage" id="ecoflowBatteryPercent">0%</div>
-                            </div>
-                            <div class="battery-state-row">
-                                <span class="ecoflow-state" id="ecoflowState">
-                                    <i class="fas fa-circle"></i> Idle
-                                </span>
-                                <span class="ecoflow-time" id="ecoflowTime">--</span>
-                            </div>
-
-                            <!-- Compact Power flow -->
-                            <div class="compact-power-flow">
-                                <div class="power-in">
-                                    <i class="fas fa-arrow-down"></i>
-                                    <span id="ecoflowInputWatts">0W</span>
-                                    <small>In</small>
-                                </div>
-                                <div class="power-battery-icon">
-                                    <i class="fas fa-battery-three-quarters" id="ecoflowBatteryIcon"></i>
-                                </div>
-                                <div class="power-out">
-                                    <i class="fas fa-arrow-up"></i>
-                                    <span id="ecoflowOutputWatts">0W</span>
-                                    <small>Out</small>
-                                </div>
-                            </div>
-
-                            <!-- Solar input (if available) -->
-                            <div class="solar-input" id="ecoflowSolarInput" style="display: none;">
-                                <i class="fas fa-sun"></i> Solar: <span>0W</span>
-                            </div>
-
-                            <!-- Compact Stats -->
-                            <div class="compact-stats">
-                                <div class="compact-stat">
-                                    <i class="fas fa-thermometer-half"></i>
-                                    <span class="stat-value" id="ecoflowBatteryTemp">--</span>
-                                    <span class="stat-label">Batt Temp</span>
-                                </div>
-                                <div class="compact-stat">
-                                    <i class="fas fa-bolt"></i>
-                                    <span class="stat-value" id="ecoflowFastCharge">--</span>
-                                    <span class="stat-label">Max Input</span>
-                                </div>
-                                <div class="compact-stat">
-                                    <i class="fas fa-shield-alt"></i>
-                                    <span class="stat-value" id="ecoflowBackupReserve">--</span>
-                                    <span class="stat-label">Reserve</span>
-                                </div>
-                            </div>
-
                         </div>
                     </div>
                 </div>
@@ -591,13 +509,14 @@
     <div class="modal" id="ecoflowConfigModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-car-battery"></i> EcoFlow Configuration</h3>
+                <h3 id="ecoflowConfigModalTitle"><i class="fas fa-car-battery"></i> Add Power Station</h3>
                 <button class="modal-close" onclick="closeEcoFlowConfigModal()">&times;</button>
             </div>
             <form id="ecoflowConfigForm" onsubmit="saveEcoFlowConfig(event)">
+                <input type="hidden" id="ecoflowConfigId" value="">
                 <div class="modal-body">
                     <p class="modal-description">
-                        Configure your EcoFlow Delta 2 Max power station. You can find your API credentials
+                        Configure your EcoFlow power station. You can find your API credentials
                         in the EcoFlow Developer Portal.
                     </p>
                     <div class="form-group">

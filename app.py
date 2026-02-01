@@ -367,6 +367,14 @@ class EcoFlowAPI:
         return EcoFlowConfig.query.first()
 
     @staticmethod
+    def get_all_configs():
+        return EcoFlowConfig.query.all()
+
+    @staticmethod
+    def get_config_by_id(config_id):
+        return EcoFlowConfig.query.get(config_id)
+
+    @staticmethod
     def generate_signature(access_key, secret_key, nonce, timestamp):
         """Generate HMAC signature for EcoFlow API authentication"""
         import hmac
@@ -380,9 +388,10 @@ class EcoFlowAPI:
         return signature
 
     @staticmethod
-    def get_all_quotas():
+    def get_all_quotas(config=None):
         """Get all device quotas (full status)"""
-        config = EcoFlowAPI.get_config()
+        if config is None:
+            config = EcoFlowAPI.get_config()
         if not config or not config.access_key or not config.secret_key or not config.device_sn:
             return {'error': 'EcoFlow not configured', 'configured': False}
 
@@ -423,9 +432,10 @@ class EcoFlowAPI:
             return {'error': str(e), 'configured': True}
 
     @staticmethod
-    def get_quotas(quotas_list):
+    def get_quotas(quotas_list, config=None):
         """Get specific quotas from device"""
-        config = EcoFlowAPI.get_config()
+        if config is None:
+            config = EcoFlowAPI.get_config()
         if not config or not config.access_key or not config.secret_key or not config.device_sn:
             return {'error': 'EcoFlow not configured', 'configured': False}
 
@@ -465,9 +475,10 @@ class EcoFlowAPI:
             return {'error': str(e), 'configured': True}
 
     @staticmethod
-    def set_quota(module_type, operate_type, params):
+    def set_quota(module_type, operate_type, params, config=None):
         """Set device quota (control device)"""
-        config = EcoFlowAPI.get_config()
+        if config is None:
+            config = EcoFlowAPI.get_config()
         if not config or not config.access_key or not config.secret_key or not config.device_sn:
             return {'error': 'EcoFlow not configured', 'configured': False}
 
@@ -1247,33 +1258,40 @@ def get_device_history(device_id):
 @app.route('/api/ecoflow/config', methods=['GET'])
 @login_required
 def get_ecoflow_config():
-    """Get EcoFlow configuration"""
+    """Get all EcoFlow configurations"""
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    config = EcoFlowConfig.query.first()
-    if config:
+    configs = EcoFlowConfig.query.all()
+    if configs:
         return jsonify({
             'configured': True,
-            'device_sn': config.device_sn,
-            'device_name': config.device_name,
-            'has_access_key': bool(config.access_key),
-            'has_secret_key': bool(config.secret_key)
+            'devices': [{
+                'id': c.id,
+                'device_sn': c.device_sn,
+                'device_name': c.device_name,
+                'has_access_key': bool(c.access_key),
+                'has_secret_key': bool(c.secret_key)
+            } for c in configs]
         })
-    return jsonify({'configured': False})
+    return jsonify({'configured': False, 'devices': []})
 
 
 @app.route('/api/ecoflow/config', methods=['POST'])
 @login_required
 def save_ecoflow_config():
-    """Save EcoFlow configuration"""
+    """Save EcoFlow configuration (create or update)"""
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
+    config_id = data.get('id')
 
-    config = EcoFlowConfig.query.first()
-    if not config:
+    if config_id:
+        config = EcoFlowConfig.query.get(config_id)
+        if not config:
+            return jsonify({'error': 'Device not found'}), 404
+    else:
         config = EcoFlowConfig()
         db.session.add(config)
 
@@ -1288,30 +1306,74 @@ def save_ecoflow_config():
 
     db.session.commit()
 
-    return jsonify({'success': True, 'message': 'EcoFlow configuration saved'})
+    return jsonify({'success': True, 'id': config.id, 'message': 'EcoFlow configuration saved'})
+
+
+@app.route('/api/ecoflow/config/<int:config_id>', methods=['DELETE'])
+@login_required
+def delete_ecoflow_config(config_id):
+    """Delete an EcoFlow device configuration"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    config = EcoFlowConfig.query.get(config_id)
+    if not config:
+        return jsonify({'error': 'Device not found'}), 404
+
+    # Also delete associated readings
+    EcoFlowReading.query.filter_by(device_sn=config.device_sn).delete()
+    db.session.delete(config)
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Device removed'})
 
 
 @app.route('/api/ecoflow/status', methods=['GET'])
 @login_required
 def get_ecoflow_status():
-    """Get current EcoFlow device status"""
-    config = EcoFlowConfig.query.first()
-    if not config or not config.access_key:
+    """Get status of all configured EcoFlow devices"""
+    configs = EcoFlowConfig.query.all()
+    if not configs:
         return jsonify({
             'configured': False,
-            'error': 'EcoFlow not configured'
+            'devices': []
         })
 
-    raw_data = EcoFlowAPI.get_all_quotas()
+    devices = []
+    for config in configs:
+        if not config.access_key:
+            devices.append({
+                'id': config.id,
+                'configured': False,
+                'device_name': config.device_name or 'Delta 2 Max',
+                'device_sn': config.device_sn,
+                'error': 'Missing API credentials'
+            })
+            continue
 
-    if 'error' in raw_data:
-        return jsonify(raw_data)
+        raw_data = EcoFlowAPI.get_all_quotas(config=config)
 
-    parsed = EcoFlowAPI.parse_status(raw_data)
-    parsed['device_name'] = config.device_name or 'Delta 2 Max'
-    parsed['device_sn'] = config.device_sn
+        if 'error' in raw_data:
+            devices.append({
+                'id': config.id,
+                'configured': True,
+                'device_name': config.device_name or 'Delta 2 Max',
+                'device_sn': config.device_sn,
+                'error': raw_data['error'],
+                'online': False
+            })
+            continue
 
-    return jsonify(parsed)
+        parsed = EcoFlowAPI.parse_status(raw_data)
+        parsed['id'] = config.id
+        parsed['device_name'] = config.device_name or 'Delta 2 Max'
+        parsed['device_sn'] = config.device_sn
+        devices.append(parsed)
+
+    return jsonify({
+        'configured': True,
+        'devices': devices
+    })
 
 
 @app.route('/api/ecoflow/control/ac', methods=['POST'])
@@ -1322,18 +1384,20 @@ def control_ecoflow_ac():
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
+    config = EcoFlowAPI.get_config_by_id(data.get('device_id')) if data.get('device_id') else EcoFlowAPI.get_config()
     enabled = data.get('enabled', False)
     xboost = data.get('xboost', False)
 
     result = EcoFlowAPI.set_quota(
-        module_type=3,  # INV
+        module_type=3,
         operate_type='acOutCfg',
         params={
             'enabled': 1 if enabled else 0,
             'xboost': 1 if xboost else 0,
-            'out_voltage': 4294967295,  # Read-only
-            'out_freq': 2  # 60 Hz
-        }
+            'out_voltage': 4294967295,
+            'out_freq': 2
+        },
+        config=config
     )
 
     return jsonify(result)
@@ -1347,12 +1411,14 @@ def control_ecoflow_dc():
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
+    config = EcoFlowAPI.get_config_by_id(data.get('device_id')) if data.get('device_id') else EcoFlowAPI.get_config()
     enabled = data.get('enabled', False)
 
     result = EcoFlowAPI.set_quota(
-        module_type=1,  # PD
+        module_type=1,
         operate_type='dcOutCfg',
-        params={'enabled': 1 if enabled else 0}
+        params={'enabled': 1 if enabled else 0},
+        config=config
     )
 
     return jsonify(result)
@@ -1366,15 +1432,17 @@ def control_ecoflow_charging():
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
+    config = EcoFlowAPI.get_config_by_id(data.get('device_id')) if data.get('device_id') else EcoFlowAPI.get_config()
 
     result = EcoFlowAPI.set_quota(
-        module_type=3,  # INV
+        module_type=3,
         operate_type='acChgCfg',
         params={
             'fastChgWatts': data.get('fast_charge_watts', 2400),
             'slowChgWatts': data.get('slow_charge_watts', 400),
             'chgPauseFlag': 0
-        }
+        },
+        config=config
     )
 
     return jsonify(result)
@@ -1388,17 +1456,19 @@ def control_ecoflow_backup():
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
+    config = EcoFlowAPI.get_config_by_id(data.get('device_id')) if data.get('device_id') else EcoFlowAPI.get_config()
     backup_soc = data.get('backup_soc', 20)
 
     result = EcoFlowAPI.set_quota(
-        module_type=1,  # PD
+        module_type=1,
         operate_type='watthConfig',
         params={
             'isConfig': 0,
             'bpPowerSoc': backup_soc,
             'minDsgSoc': 255,
             'minChgSoc': 255
-        }
+        },
+        config=config
     )
 
     return jsonify(result)

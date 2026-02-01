@@ -60,8 +60,8 @@ function toggleTempUnit() {
         renderNetworkDiagram(allSensors);
     }
     // Re-render EcoFlow display with new unit
-    if (ecoflowStatus && ecoflowConfigured) {
-        updateEcoFlowDisplay(ecoflowStatus);
+    if (ecoflowDevices.length > 0) {
+        renderPowerStationCards(ecoflowDevices);
     }
 }
 
@@ -1545,171 +1545,199 @@ function renderCharts(readings) {
 }
 
 // =============================================================================
-// EcoFlow Power Station
+// EcoFlow Power Stations (Multi-Device)
 // =============================================================================
 
-let ecoflowStatus = null;
+let ecoflowDevices = [];
 let ecoflowConfigured = false;
 
 async function loadEcoFlow() {
-    const loading = document.getElementById('ecoflowLoading');
-    const unconfigured = document.getElementById('ecoflowUnconfigured');
-    const dashboard = document.getElementById('ecoflowDashboard');
+    const container = document.getElementById('powerStationsContainer');
+    if (!container) return;
 
     try {
         const response = await fetch('/api/ecoflow/status');
         const data = await response.json();
 
-        if (loading) loading.style.display = 'none';
-
-        if (!data.configured) {
+        if (!data.configured || !data.devices || data.devices.length === 0) {
             ecoflowConfigured = false;
-            if (unconfigured) unconfigured.style.display = 'block';
-            if (dashboard) dashboard.style.display = 'none';
+            ecoflowDevices = [];
+            renderPowerStationCards([]);
             return;
         }
 
         ecoflowConfigured = true;
-        ecoflowStatus = data;
-
-        if (unconfigured) unconfigured.style.display = 'none';
-        if (dashboard) dashboard.style.display = 'block';
-
-        updateEcoFlowDisplay(data);
+        ecoflowDevices = data.devices;
+        renderPowerStationCards(data.devices);
     } catch (error) {
         console.error('Error loading EcoFlow status:', error);
-        if (loading) loading.style.display = 'none';
-        if (unconfigured) {
-            unconfigured.style.display = 'block';
-            unconfigured.querySelector('p').textContent = 'Error loading power station status';
-        }
+        renderPowerStationCards([]);
     }
 }
 
-function updateEcoFlowDisplay(data) {
-    // Device name
-    const deviceName = document.getElementById('ecoflowDeviceName');
-    if (deviceName) deviceName.textContent = data.device_name || 'Delta 2 Max';
+function renderPowerStationCards(devices) {
+    const container = document.getElementById('powerStationsContainer');
+    if (!container) return;
+    container.innerHTML = '';
 
-    // Status
-    const status = document.getElementById('ecoflowStatus');
-    if (status) {
-        status.textContent = data.online ? 'Online' : 'Offline';
-        status.className = `ecoflow-status ${data.online ? 'online' : 'offline'}`;
+    // Render each device card
+    devices.forEach(device => {
+        const card = createPowerStationCard(device);
+        container.appendChild(card);
+    });
+
+    // Add "Add Power Station" card (admin only)
+    if (currentUser.isAdmin) {
+        const addCard = document.createElement('div');
+        addCard.className = 'power-station-card add-card';
+        addCard.onclick = () => showEcoFlowConfigModal();
+        addCard.innerHTML = `
+            <div class="add-card-content">
+                <i class="fas fa-plus-circle"></i>
+                <span>Add Power Station</span>
+            </div>
+        `;
+        container.appendChild(addCard);
     }
+}
 
-    // Battery level
-    const batteryLevel = document.getElementById('ecoflowBatteryLevel');
-    const batteryPercent = document.getElementById('ecoflowBatteryPercent');
-    const soc = data.soc || 0;
+function createPowerStationCard(device) {
+    const card = document.createElement('div');
+    card.className = 'power-station-card';
+    card.dataset.deviceId = device.id;
 
-    if (batteryLevel) {
-        batteryLevel.style.width = `${soc}%`;
-        // Color based on level
-        if (soc <= 20) {
-            batteryLevel.style.background = 'linear-gradient(90deg, #ff3366, #ff6b6b)';
-        } else if (soc <= 50) {
-            batteryLevel.style.background = 'linear-gradient(90deg, #ffa500, #ffd700)';
-        } else {
-            batteryLevel.style.background = 'linear-gradient(90deg, #00d4aa, #00ff88)';
-        }
-    }
-    if (batteryPercent) batteryPercent.textContent = `${soc}%`;
+    const isOnline = device.online !== false && !device.error;
+    const soc = device.soc || 0;
 
-    // State and time
-    const stateEl = document.getElementById('ecoflowState');
-    const timeEl = document.getElementById('ecoflowTime');
+    // Battery bar color
+    let batteryGradient = 'linear-gradient(90deg, #00d4aa, #00ff88)';
+    if (soc <= 20) batteryGradient = 'linear-gradient(90deg, #ff3366, #ff6b6b)';
+    else if (soc <= 50) batteryGradient = 'linear-gradient(90deg, #ffa500, #ffd700)';
 
-    if (stateEl) {
-        let stateIcon, stateText, stateClass;
-        switch (data.state) {
-            case 'charging':
-                stateIcon = 'fa-bolt';
-                stateText = 'Charging';
-                stateClass = 'charging';
-                break;
-            case 'discharging':
-                stateIcon = 'fa-arrow-down';
-                stateText = 'Discharging';
-                stateClass = 'discharging';
-                break;
-            default:
-                stateIcon = 'fa-circle';
-                stateText = 'Idle';
-                stateClass = 'idle';
-        }
-        stateEl.innerHTML = `<i class="fas ${stateIcon}"></i> ${stateText}`;
-        stateEl.className = `ecoflow-state ${stateClass}`;
-    }
-
-    if (timeEl) {
-        timeEl.textContent = data.remain_time_display || '--';
-    }
-
-    // Power flow
-    const inputWatts = document.getElementById('ecoflowInputWatts');
-    const outputWatts = document.getElementById('ecoflowOutputWatts');
-    const solarInput = document.getElementById('ecoflowSolarInput');
-    const acOutput = document.getElementById('ecoflowAcOutput');
-
-    if (inputWatts) inputWatts.textContent = `${data.watts_in || 0}W`;
-    if (outputWatts) outputWatts.textContent = `${data.watts_out || 0}W`;
-
-    if (solarInput) {
-        if (data.solar_in_watts > 0) {
-            solarInput.style.display = 'inline';
-            solarInput.querySelector('span').textContent = `${data.solar_in_watts}W`;
-        } else {
-            solarInput.style.display = 'none';
-        }
-    }
-
-    if (acOutput) {
-        acOutput.querySelector('span').textContent = `${data.ac_output_watts || 0}W`;
-    }
+    // State info
+    let stateIcon = 'fa-circle', stateText = 'Idle', stateClass = 'idle';
+    if (device.state === 'charging') { stateIcon = 'fa-bolt'; stateText = 'Charging'; stateClass = 'charging'; }
+    else if (device.state === 'discharging') { stateIcon = 'fa-arrow-down'; stateText = 'Discharging'; stateClass = 'discharging'; }
 
     // Battery icon
-    const batteryIcon = document.getElementById('ecoflowBatteryIcon');
-    if (batteryIcon) {
-        let iconClass;
-        if (soc >= 75) iconClass = 'fa-battery-full';
-        else if (soc >= 50) iconClass = 'fa-battery-three-quarters';
-        else if (soc >= 25) iconClass = 'fa-battery-half';
-        else if (soc >= 10) iconClass = 'fa-battery-quarter';
-        else iconClass = 'fa-battery-empty';
+    let battIconClass = 'fa-battery-three-quarters';
+    if (soc >= 75) battIconClass = 'fa-battery-full';
+    else if (soc >= 50) battIconClass = 'fa-battery-three-quarters';
+    else if (soc >= 25) battIconClass = 'fa-battery-half';
+    else if (soc >= 10) battIconClass = 'fa-battery-quarter';
+    else battIconClass = 'fa-battery-empty';
 
-        batteryIcon.className = `fas ${iconClass}`;
-        if (data.state === 'charging') {
-            batteryIcon.classList.add('charging');
-        }
+    // Battery temp
+    let battTempDisplay = '--';
+    if (device.battery_temp !== null && device.battery_temp !== undefined) {
+        const tempValue = useCelsius ? device.battery_temp : (device.battery_temp * 9/5) + 32;
+        const unit = useCelsius ? '°C' : '°F';
+        battTempDisplay = `${tempValue.toFixed(1)}${unit}`;
     }
 
-    // Toggle buttons
-    const acToggle = document.getElementById('ecoflowAcToggle');
-    const dcToggle = document.getElementById('ecoflowDcToggle');
-    const xboostToggle = document.getElementById('ecoflowXboostToggle');
-
-    if (acToggle) acToggle.classList.toggle('active', data.ac_enabled);
-    if (dcToggle) dcToggle.classList.toggle('active', data.dc_enabled);
-    if (xboostToggle) xboostToggle.classList.toggle('active', data.ac_xboost);
-
-    // Stats
-    const batteryTemp = document.getElementById('ecoflowBatteryTemp');
-    const fastCharge = document.getElementById('ecoflowFastCharge');
-    const backupReserve = document.getElementById('ecoflowBackupReserve');
-
-    if (batteryTemp) {
-        if (data.battery_temp !== null && data.battery_temp !== undefined) {
-            // Convert battery temperature based on user preference (EcoFlow reports in Celsius)
-            const tempValue = useCelsius ? data.battery_temp : (data.battery_temp * 9/5) + 32;
-            const unit = useCelsius ? '°C' : '°F';
-            batteryTemp.textContent = `${tempValue.toFixed(1)}${unit}`;
-        } else {
-            batteryTemp.textContent = '--';
-        }
+    if (device.error && !device.online) {
+        // Error/offline state
+        card.innerHTML = `
+            <div class="power-card-header">
+                <div class="power-card-title">
+                    <i class="fas fa-car-battery"></i>
+                    <span>${escapeHtml(device.device_name || 'Power Station')}</span>
+                </div>
+                <div class="power-card-status">
+                    <span class="ecoflow-status offline">Offline</span>
+                    ${currentUser.isAdmin ? `
+                        <button class="btn btn-sm btn-icon" onclick="showEcoFlowConfigModal(${device.id})" title="Configure">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <button class="btn btn-sm btn-icon btn-danger-icon" onclick="removeEcoFlowDevice(${device.id})" title="Remove">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+            <div class="ecoflow-error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>${escapeHtml(device.error || 'Unable to connect')}</p>
+            </div>
+        `;
+        return card;
     }
-    if (fastCharge) fastCharge.textContent = data.fast_charge_watts ? `${data.fast_charge_watts}W` : '--';
-    if (backupReserve) backupReserve.textContent = data.backup_reserve ? `${data.backup_reserve}%` : '--';
+
+    card.innerHTML = `
+        <div class="power-card-header">
+            <div class="power-card-title">
+                <i class="fas fa-car-battery"></i>
+                <span>${escapeHtml(device.device_name || 'Power Station')}</span>
+            </div>
+            <div class="power-card-status">
+                <span class="ecoflow-status ${isOnline ? 'online' : 'offline'}">${isOnline ? 'Online' : 'Offline'}</span>
+                ${currentUser.isAdmin ? `
+                    <button class="btn btn-sm btn-icon" onclick="showEcoFlowConfigModal(${device.id})" title="Configure">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="btn btn-sm btn-icon btn-danger-icon" onclick="removeEcoFlowDevice(${device.id})" title="Remove">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+
+        <!-- Battery gauge -->
+        <div class="compact-battery-gauge">
+            <div class="battery-level" style="width: ${soc}%; background: ${batteryGradient}"></div>
+            <div class="battery-percentage">${soc}%</div>
+        </div>
+        <div class="battery-state-row">
+            <span class="ecoflow-state ${stateClass}">
+                <i class="fas ${stateIcon}"></i> ${stateText}
+            </span>
+            <span class="ecoflow-time">${device.remain_time_display || '--'}</span>
+        </div>
+
+        <!-- Power flow -->
+        <div class="compact-power-flow">
+            <div class="power-in">
+                <i class="fas fa-arrow-down"></i>
+                <span>${device.watts_in || 0}W</span>
+                <small>In</small>
+            </div>
+            <div class="power-battery-icon">
+                <i class="fas ${battIconClass} ${device.state === 'charging' ? 'charging' : ''}"></i>
+            </div>
+            <div class="power-out">
+                <i class="fas fa-arrow-up"></i>
+                <span>${device.watts_out || 0}W</span>
+                <small>Out</small>
+            </div>
+        </div>
+
+        ${device.solar_in_watts > 0 ? `
+            <div class="solar-input">
+                <i class="fas fa-sun"></i> Solar: <span>${device.solar_in_watts}W</span>
+            </div>
+        ` : ''}
+
+        <!-- Stats -->
+        <div class="compact-stats">
+            <div class="compact-stat">
+                <i class="fas fa-thermometer-half"></i>
+                <span class="stat-value">${battTempDisplay}</span>
+                <span class="stat-label">Batt Temp</span>
+            </div>
+            <div class="compact-stat">
+                <i class="fas fa-bolt"></i>
+                <span class="stat-value">${device.fast_charge_watts ? device.fast_charge_watts + 'W' : '--'}</span>
+                <span class="stat-label">Max Input</span>
+            </div>
+            <div class="compact-stat">
+                <i class="fas fa-shield-alt"></i>
+                <span class="stat-value">${device.backup_reserve ? device.backup_reserve + '%' : '--'}</span>
+                <span class="stat-label">Reserve</span>
+            </div>
+        </div>
+    `;
+
+    return card;
 }
 
 async function refreshEcoFlow() {
@@ -1726,105 +1754,55 @@ async function refreshEcoFlow() {
         btn.disabled = false;
     }
 
-    showToast('Power station refreshed');
+    showToast('Power stations refreshed');
 }
 
-async function toggleEcoFlowAc() {
-    if (!ecoflowStatus) return;
-
-    const newState = !ecoflowStatus.ac_enabled;
+async function removeEcoFlowDevice(deviceId) {
+    if (!confirm('Are you sure you want to remove this power station?')) return;
 
     try {
-        const response = await fetch('/api/ecoflow/control/ac', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                enabled: newState,
-                xboost: ecoflowStatus.ac_xboost
+        const response = await fetch(`/api/ecoflow/config/${deviceId}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Power station removed');
+            loadEcoFlow();
+        } else {
+            showToast(data.error || 'Failed to remove device', 'error');
+        }
+    } catch (error) {
+        showToast('Error removing device', 'error');
+    }
+}
+
+function showEcoFlowConfigModal(deviceId = null) {
+    // Reset form
+    document.getElementById('ecoflowConfigId').value = deviceId || '';
+    document.getElementById('ecoflowDeviceNameInput').value = '';
+    document.getElementById('ecoflowDeviceSn').value = '';
+    document.getElementById('ecoflowAccessKey').value = '';
+    document.getElementById('ecoflowSecretKey').value = '';
+
+    const modalTitle = document.getElementById('ecoflowConfigModalTitle');
+    if (modalTitle) {
+        modalTitle.textContent = deviceId ? 'Edit Power Station' : 'Add Power Station';
+    }
+
+    // If editing, load existing config
+    if (deviceId) {
+        fetch('/api/ecoflow/config')
+            .then(response => response.json())
+            .then(data => {
+                if (data.devices) {
+                    const device = data.devices.find(d => d.id === deviceId);
+                    if (device) {
+                        document.getElementById('ecoflowDeviceNameInput').value = device.device_name || '';
+                        document.getElementById('ecoflowDeviceSn').value = device.device_sn || '';
+                    }
+                }
             })
-        });
-
-        const data = await response.json();
-
-        if (data.code === '0' || data.success) {
-            showToast(`AC output ${newState ? 'enabled' : 'disabled'}`);
-            setTimeout(loadEcoFlow, 1000);
-        } else {
-            showToast('Failed to toggle AC output', 'error');
-        }
-    } catch (error) {
-        showToast('Error controlling AC output', 'error');
+            .catch(() => {});
     }
-}
-
-async function toggleEcoFlowDc() {
-    if (!ecoflowStatus) return;
-
-    const newState = !ecoflowStatus.dc_enabled;
-
-    try {
-        const response = await fetch('/api/ecoflow/control/dc', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: newState })
-        });
-
-        const data = await response.json();
-
-        if (data.code === '0' || data.success) {
-            showToast(`DC output ${newState ? 'enabled' : 'disabled'}`);
-            setTimeout(loadEcoFlow, 1000);
-        } else {
-            showToast('Failed to toggle DC output', 'error');
-        }
-    } catch (error) {
-        showToast('Error controlling DC output', 'error');
-    }
-}
-
-async function toggleEcoFlowXboost() {
-    if (!ecoflowStatus) return;
-
-    const newState = !ecoflowStatus.ac_xboost;
-
-    try {
-        const response = await fetch('/api/ecoflow/control/ac', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                enabled: ecoflowStatus.ac_enabled,
-                xboost: newState
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.code === '0' || data.success) {
-            showToast(`X-Boost ${newState ? 'enabled' : 'disabled'}`);
-            setTimeout(loadEcoFlow, 1000);
-        } else {
-            showToast('Failed to toggle X-Boost', 'error');
-        }
-    } catch (error) {
-        showToast('Error controlling X-Boost', 'error');
-    }
-}
-
-function showEcoFlowConfigModal() {
-    // First load current config
-    fetch('/api/ecoflow/config')
-        .then(response => response.json())
-        .then(data => {
-            if (data.device_sn) {
-                document.getElementById('ecoflowDeviceSn').value = data.device_sn;
-            }
-            if (data.device_name) {
-                document.getElementById('ecoflowDeviceNameInput').value = data.device_name;
-            }
-            document.getElementById('ecoflowAccessKey').value = '';
-            document.getElementById('ecoflowSecretKey').value = '';
-        })
-        .catch(() => {});
 
     document.getElementById('ecoflowConfigModal').classList.add('show');
 }
@@ -1836,12 +1814,17 @@ function closeEcoFlowConfigModal() {
 async function saveEcoFlowConfig(event) {
     event.preventDefault();
 
+    const configId = document.getElementById('ecoflowConfigId').value;
     const config = {
         device_name: document.getElementById('ecoflowDeviceNameInput').value,
         device_sn: document.getElementById('ecoflowDeviceSn').value,
         access_key: document.getElementById('ecoflowAccessKey').value,
         secret_key: document.getElementById('ecoflowSecretKey').value
     };
+
+    if (configId) {
+        config.id = parseInt(configId);
+    }
 
     try {
         const response = await fetch('/api/ecoflow/config', {
@@ -1853,7 +1836,7 @@ async function saveEcoFlowConfig(event) {
         const data = await response.json();
 
         if (data.success) {
-            showToast('EcoFlow configuration saved');
+            showToast(configId ? 'Power station updated' : 'Power station added');
             closeEcoFlowConfigModal();
             loadEcoFlow();
         } else {
