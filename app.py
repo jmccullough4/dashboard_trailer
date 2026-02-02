@@ -2088,7 +2088,7 @@ def send_push_notification(title, body, badge=1):
             'iss': team_id,
             'iat': int(time.time()),
         }
-        token = pyjwt.encode(token_payload, auth_key, algorithm='ES256', headers={'alg': 'ES256', 'kid': key_id})
+        token = pyjwt.encode(token_payload, auth_key, algorithm='ES256', headers={'kid': key_id})
         # PyJWT 1.x returns bytes, 2.x returns str
         if isinstance(token, bytes):
             token = token.decode('utf-8')
@@ -2114,7 +2114,7 @@ def send_push_notification(title, body, badge=1):
 
         sent = 0
         errors = []
-        with httpx.Client(http2=True) as client:
+        with httpx.Client(http1=False, http2=True) as client:
             for device in tokens:
                 try:
                     url = f"{apns_host}/3/device/{device.token}"
@@ -2125,6 +2125,7 @@ def send_push_notification(title, body, badge=1):
                         'apns-priority': '10',
                     }
                     resp = client.post(url, json=notification, headers=headers)
+                    print(f"APNs response: {resp.status_code} http/{resp.http_version} for {device.token[:12]}...")
                     if resp.status_code == 200:
                         sent += 1
                     else:

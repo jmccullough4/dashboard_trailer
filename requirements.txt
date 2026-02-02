@@ -9,5 +9,5 @@ reportlab==4.0.7
 Pillow==10.1.0
 matplotlib==3.8.2
 httpx[http2]==0.28.1
-PyJWT==1.7.1
+PyJWT[crypto]>=2.6.0
 cryptography>=41.0.0
