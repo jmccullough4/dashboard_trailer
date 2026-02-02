@@ -2096,10 +2096,11 @@ def send_push_notification(title, body, badge=1):
             content_available=True
         )
 
-        # Get all active device tokens
-        tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
+        # Get all active device tokens (filter to valid APNs hex tokens only)
+        all_tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
+        tokens = [d for d in all_tokens if d.token and len(d.token) >= 64 and all(c in '0123456789abcdef' for c in d.token.lower())]
         if not tokens:
-            print("No registered devices to notify")
+            print(f"No valid APNs tokens to notify ({len(all_tokens)} total devices)")
             return 0
 
         sent = 0
@@ -2236,35 +2237,48 @@ def public_register_device():
     device_id = data.get('device_id', '')
     device_name = data.get('device_name', '')
 
-    # If device_id provided, find by device_id first (handles token changes)
-    existing = None
-    if device_id:
-        existing = DeviceToken.query.filter_by(device_id=device_id).first()
+    try:
+        # If device_id provided, find by device_id first (handles token changes)
+        if device_id:
+            existing = DeviceToken.query.filter_by(device_id=device_id).first()
+            if existing:
+                # Check if new token conflicts with a different device's record
+                conflict = DeviceToken.query.filter(
+                    DeviceToken.token == token,
+                    DeviceToken.id != existing.id
+                ).first()
+                if conflict:
+                    db.session.delete(conflict)
+
+                existing.token = token
+                existing.last_seen = datetime.utcnow()
+                existing.is_active = True
+                if device_name:
+                    existing.device_name = device_name
+                db.session.commit()
+                return jsonify({'success': True, 'status': 'updated'})
+
+        # Fall back to finding by token
+        existing = DeviceToken.query.filter_by(token=token).first()
         if existing:
-            existing.token = token
             existing.last_seen = datetime.utcnow()
             existing.is_active = True
+            if device_id and not existing.device_id:
+                existing.device_id = device_id
             if device_name:
                 existing.device_name = device_name
             db.session.commit()
             return jsonify({'success': True, 'status': 'updated'})
 
-    # Fall back to finding by token
-    existing = DeviceToken.query.filter_by(token=token).first()
-    if existing:
-        existing.last_seen = datetime.utcnow()
-        existing.is_active = True
-        if device_id:
-            existing.device_id = device_id
-        if device_name:
-            existing.device_name = device_name
+        device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name)
+        db.session.add(device)
         db.session.commit()
-        return jsonify({'success': True, 'status': 'updated'})
+        return jsonify({'success': True, 'status': 'registered'})
 
-    device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name)
-    db.session.add(device)
-    db.session.commit()
-    return jsonify({'success': True, 'status': 'registered'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Device registration error: {e}")
+        return jsonify({'error': 'Registration failed'}), 500
 
 
 # =============================================================================
