@@ -33,9 +33,8 @@ except ImportError:
 
 # APNs Push Notification imports
 try:
-    from apns2.client import APNsClient
-    from apns2.payload import Payload
-    from apns2.credentials import TokenCredentials
+    import httpx
+    import jwt as pyjwt
     APNS_AVAILABLE = True
 except ImportError:
     APNS_AVAILABLE = False
@@ -2065,12 +2064,11 @@ def apply_update():
 # =============================================================================
 
 def send_push_notification(title, body, badge=1):
-    """Send push notification to all registered iOS devices"""
+    """Send push notification to all registered iOS devices via APNs HTTP/2"""
     if not APNS_AVAILABLE:
-        print("APNs not available - apns2 package not installed")
-        return {'sent': 0, 'error': 'apns2 not installed'}
+        print("APNs not available - httpx/jwt packages not installed")
+        return {'sent': 0, 'error': 'httpx or PyJWT not installed'}
 
-    # Load APNs config from environment or app config
     key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_A9VMASUDQ9.p8')
     key_id = os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9')
     team_id = os.environ.get('APNS_TEAM_ID', 'GM432NV6J6')
@@ -2082,19 +2080,17 @@ def send_push_notification(title, body, badge=1):
         return {'sent': 0, 'error': f'Key file not found: {key_path}'}
 
     try:
-        token_credentials = TokenCredentials(
-            auth_key_path=key_path,
-            auth_key_id=key_id,
-            team_id=team_id
-        )
-        client = APNsClient(credentials=token_credentials, use_sandbox=use_sandbox)
+        with open(key_path, 'r') as f:
+            auth_key = f.read()
 
-        payload = Payload(
-            alert={"title": title, "body": body},
-            sound="default",
-            badge=badge,
-            content_available=True
-        )
+        # Build JWT token for APNs
+        token_payload = {
+            'iss': team_id,
+            'iat': int(time.time()),
+        }
+        token = pyjwt.encode(token_payload, auth_key, algorithm='ES256', headers={'kid': key_id})
+
+        apns_host = 'https://api.sandbox.push.apple.com' if use_sandbox else 'https://api.push.apple.com'
 
         # Get all active device tokens (filter to valid APNs hex tokens only)
         all_tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
@@ -2104,19 +2100,39 @@ def send_push_notification(title, body, badge=1):
             print(msg)
             return {'sent': 0, 'total_devices': len(all_tokens), 'valid_tokens': 0, 'error': msg}
 
+        notification = {
+            'aps': {
+                'alert': {'title': title, 'body': body},
+                'sound': 'default',
+                'badge': badge,
+                'content-available': 1
+            }
+        }
+
         sent = 0
         errors = []
-        for device in tokens:
-            try:
-                client.send_notification(device.token, payload, bundle_id)
-                sent += 1
-            except Exception as e:
-                err_str = str(e)
-                print(f"Failed to send to {device.token[:12]}...: {err_str}")
-                errors.append(err_str)
-                # Mark bad tokens as inactive
-                if 'BadDeviceToken' in err_str or 'Unregistered' in err_str:
-                    device.is_active = False
+        with httpx.Client(http2=True) as client:
+            for device in tokens:
+                try:
+                    url = f"{apns_host}/3/device/{device.token}"
+                    headers = {
+                        'authorization': f'bearer {token}',
+                        'apns-topic': bundle_id,
+                        'apns-push-type': 'alert',
+                        'apns-priority': '10',
+                    }
+                    resp = client.post(url, json=notification, headers=headers)
+                    if resp.status_code == 200:
+                        sent += 1
+                    else:
+                        err_body = resp.text
+                        print(f"APNs {resp.status_code} for {device.token[:12]}...: {err_body}")
+                        errors.append(f"{resp.status_code}: {err_body}")
+                        if resp.status_code in (400, 410):
+                            device.is_active = False
+                except Exception as e:
+                    print(f"Failed to send to {device.token[:12]}...: {e}")
+                    errors.append(str(e))
 
         db.session.commit()
         print(f"Push notifications sent: {sent}/{len(tokens)}")
@@ -2128,10 +2144,6 @@ def send_push_notification(title, body, badge=1):
     except Exception as e:
         print(f"APNs error: {e}")
         return {'sent': 0, 'error': str(e)}
-
-    except Exception as e:
-        print(f"APNs error: {e}")
-        return 0
 
 
 # =============================================================================
