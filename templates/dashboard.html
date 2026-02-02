@@ -333,6 +333,16 @@
                             <span class="cc-stat-value" id="deviceCount">--</span>
                         </div>
                     </div>
+                    <div class="cc-stat-card">
+                        <div class="cc-stat-icon"><i class="fas fa-bell"></i></div>
+                        <div class="cc-stat-info">
+                            <span class="cc-stat-label">Push Notifications</span>
+                            <span class="cc-stat-value" id="apnsStatus">Checking...</span>
+                        </div>
+                        <button class="btn btn-sm btn-icon" onclick="testPushNotification()" title="Send test push">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>
             </section>
             {% endif %}

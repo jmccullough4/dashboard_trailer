@@ -31,6 +31,15 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
 
+# APNs Push Notification imports
+try:
+    from apns2.client import APNsClient
+    from apns2.payload import Payload
+    from apns2.credentials import TokenCredentials
+    APNS_AVAILABLE = True
+except ImportError:
+    APNS_AVAILABLE = False
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -2050,6 +2059,68 @@ def apply_update():
 
 
 # =============================================================================
+# APNs Push Notifications
+# =============================================================================
+
+def send_push_notification(title, body, badge=1):
+    """Send push notification to all registered iOS devices"""
+    if not APNS_AVAILABLE:
+        print("APNs not available - apns2 package not installed")
+        return 0
+
+    # Load APNs config from environment or app config
+    key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_A9VMASUDQ9.p8')
+    key_id = os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9')
+    team_id = os.environ.get('APNS_TEAM_ID', 'GM432NV6J6')
+    bundle_id = os.environ.get('APNS_BUNDLE_ID', 'com.threestrandscattle.app')
+    use_sandbox = os.environ.get('APNS_SANDBOX', 'false').lower() == 'true'
+
+    if not os.path.exists(key_path):
+        print(f"APNs key file not found: {key_path}")
+        return 0
+
+    try:
+        token_credentials = TokenCredentials(
+            auth_key_path=key_path,
+            auth_key_id=key_id,
+            team_id=team_id
+        )
+        client = APNsClient(credentials=token_credentials, use_sandbox=use_sandbox)
+
+        payload = Payload(
+            alert={"title": title, "body": body},
+            sound="default",
+            badge=badge,
+            content_available=True
+        )
+
+        # Get all active device tokens
+        tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
+        if not tokens:
+            print("No registered devices to notify")
+            return 0
+
+        sent = 0
+        for device in tokens:
+            try:
+                client.send_notification(device.token, payload, bundle_id)
+                sent += 1
+            except Exception as e:
+                print(f"Failed to send to {device.token[:12]}...: {e}")
+                # Mark bad tokens as inactive
+                if 'BadDeviceToken' in str(e) or 'Unregistered' in str(e):
+                    device.is_active = False
+
+        db.session.commit()
+        print(f"Push notifications sent: {sent}/{len(tokens)}")
+        return sent
+
+    except Exception as e:
+        print(f"APNs error: {e}")
+        return 0
+
+
+# =============================================================================
 # Square Catalog API Integration
 # =============================================================================
 
@@ -2223,6 +2294,16 @@ def create_flash_sale():
         sale.expires_at = datetime.utcnow() + timedelta(hours=24)
 
     db.session.commit()
+
+    # Send push notification for active sales
+    if sale.is_active:
+        discount = int(((sale.original_price - sale.sale_price) / sale.original_price) * 100) if sale.original_price > 0 else 0
+        action = "New" if not sale_id else "Updated"
+        send_push_notification(
+            f"3 Strands Flash Sale!",
+            f"{action}: {sale.title} — {discount}% off! ${sale.sale_price:.2f}/lb"
+        )
+
     return jsonify({'success': True, 'sale': sale.to_dict()})
 
 
@@ -2291,6 +2372,16 @@ def create_popup_location():
         loc.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00').replace('+00:00', ''))
 
     db.session.commit()
+
+    # Send push notification for active locations
+    if loc.is_active:
+        date_str = loc.date.strftime('%b %d') if loc.date else ''
+        action = "New" if not loc_id else "Updated"
+        send_push_notification(
+            f"3 Strands is Coming to You!",
+            f"{action}: {loc.title} — {date_str} at {loc.location}"
+        )
+
     return jsonify({'success': True, 'location': loc.to_dict()})
 
 
@@ -2409,6 +2500,40 @@ def reverse_geocode():
         return jsonify({'success': False, 'error': 'Location not found'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/apns/status', methods=['GET'])
+@login_required
+def get_apns_status():
+    """Check if APNs push notifications are configured"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_A9VMASUDQ9.p8')
+    key_exists = os.path.exists(key_path)
+    device_count = DeviceToken.query.filter_by(is_active=True, platform='ios').count()
+
+    return jsonify({
+        'available': APNS_AVAILABLE,
+        'key_configured': key_exists,
+        'key_id': os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9'),
+        'team_id': os.environ.get('APNS_TEAM_ID', 'GM432NV6J6'),
+        'active_devices': device_count
+    })
+
+
+@app.route('/api/apns/test', methods=['POST'])
+@login_required
+def test_push_notification():
+    """Send a test push notification to all registered devices"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    sent = send_push_notification(
+        "3 Strands Test",
+        "Push notifications are working! You'll receive alerts for flash sales and pop-up locations."
+    )
+    return jsonify({'success': True, 'sent': sent})
 
 
 @app.route('/api/devices', methods=['GET'])
