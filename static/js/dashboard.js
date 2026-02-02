@@ -107,6 +107,7 @@ function initNavigation() {
         'sensors': 'Sensor Dashboard',
         'tasks': 'Task Board',
         'files': 'File Manager',
+        'appcontrol': 'App Command & Control',
         'admin': 'User Management',
         'settings': 'System Settings'
     };
@@ -123,6 +124,13 @@ function initNavigation() {
             document.getElementById(`${section}-section`).classList.add('active');
 
             pageTitle.textContent = titles[section] || 'Dashboard';
+
+            // Lazy-load App C&C data
+            if (section === 'appcontrol') {
+                loadFlashSales();
+                loadPopUpLocations();
+                loadAppControlStats();
+            }
 
             // Close sidebar on mobile
             if (window.innerWidth <= 768) {
@@ -2009,4 +2017,370 @@ async function applyUpdate() {
         overlay.classList.remove('active');
         showToast('Update failed: Network error', 'error');
     }
+}
+
+// =============================================================================
+// App Command & Control - Flash Sales
+// =============================================================================
+
+async function loadFlashSales() {
+    try {
+        const response = await fetch('/api/flash-sales');
+        const sales = await response.json();
+        renderFlashSalesTable(sales);
+    } catch (error) {
+        console.error('Error loading flash sales:', error);
+    }
+}
+
+function renderFlashSalesTable(sales) {
+    const tbody = document.getElementById('flashSalesTableBody');
+    const empty = document.getElementById('flashSalesEmpty');
+    if (!tbody) return;
+
+    if (sales.length === 0) {
+        tbody.innerHTML = '';
+        if (empty) empty.style.display = 'flex';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = sales.map(sale => {
+        const expires = new Date(sale.expires_at);
+        const isExpired = expires < new Date();
+        const statusClass = !sale.is_active ? 'inactive' : isExpired ? 'expired' : 'active';
+        const statusText = !sale.is_active ? 'Inactive' : isExpired ? 'Expired' : 'Live';
+        const discount = sale.original_price > 0 ? Math.round(((sale.original_price - sale.sale_price) / sale.original_price) * 100) : 0;
+
+        return `<tr>
+            <td><strong>${escapeHtml(sale.title)}</strong></td>
+            <td>${escapeHtml(sale.cut_type)}</td>
+            <td>$${sale.original_price.toFixed(2)}</td>
+            <td><span class="sale-price-badge">$${sale.sale_price.toFixed(2)} <small>(-${discount}%)</small></span></td>
+            <td>${expires.toLocaleDateString()} ${expires.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
+            <td>
+                <button class="btn btn-sm btn-icon" onclick="editFlashSale(${sale.id})" title="Edit"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deleteFlashSale(${sale.id})" title="Delete"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showFlashSaleModal(saleId = null) {
+    document.getElementById('flashSaleId').value = '';
+    document.getElementById('flashSaleTitle').value = '';
+    document.getElementById('flashSaleDescription').value = '';
+    document.getElementById('flashSaleCutType').value = 'Custom Box';
+    document.getElementById('flashSaleWeight').value = '1.0';
+    document.getElementById('flashSaleOrigPrice').value = '';
+    document.getElementById('flashSaleSalePrice').value = '';
+    document.getElementById('flashSaleIcon').value = 'flame.fill';
+    document.getElementById('flashSaleActive').checked = true;
+
+    // Default: starts now, expires in 24h
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    document.getElementById('flashSaleStartsAt').value = toLocalISOString(now);
+    document.getElementById('flashSaleExpiresAt').value = toLocalISOString(tomorrow);
+
+    document.getElementById('flashSaleModalTitle').innerHTML = '<i class="fas fa-bolt"></i> New Flash Sale';
+    document.getElementById('flashSaleModal').classList.add('show');
+}
+
+function closeFlashSaleModal() {
+    document.getElementById('flashSaleModal').classList.remove('show');
+}
+
+async function editFlashSale(saleId) {
+    try {
+        const response = await fetch('/api/flash-sales');
+        const sales = await response.json();
+        const sale = sales.find(s => s.id === saleId);
+        if (!sale) return;
+
+        document.getElementById('flashSaleId').value = sale.id;
+        document.getElementById('flashSaleTitle').value = sale.title;
+        document.getElementById('flashSaleDescription').value = sale.description;
+        document.getElementById('flashSaleCutType').value = sale.cut_type;
+        document.getElementById('flashSaleWeight').value = sale.weight_lbs;
+        document.getElementById('flashSaleOrigPrice').value = sale.original_price;
+        document.getElementById('flashSaleSalePrice').value = sale.sale_price;
+        document.getElementById('flashSaleIcon').value = sale.image_system_name;
+        document.getElementById('flashSaleActive').checked = sale.is_active;
+
+        if (sale.starts_at) document.getElementById('flashSaleStartsAt').value = toLocalISOString(new Date(sale.starts_at));
+        if (sale.expires_at) document.getElementById('flashSaleExpiresAt').value = toLocalISOString(new Date(sale.expires_at));
+
+        document.getElementById('flashSaleModalTitle').innerHTML = '<i class="fas fa-bolt"></i> Edit Flash Sale';
+        document.getElementById('flashSaleModal').classList.add('show');
+    } catch (error) {
+        showToast('Error loading sale details', 'error');
+    }
+}
+
+async function saveFlashSale(event) {
+    event.preventDefault();
+    const saleId = document.getElementById('flashSaleId').value;
+    const data = {
+        title: document.getElementById('flashSaleTitle').value,
+        description: document.getElementById('flashSaleDescription').value,
+        cut_type: document.getElementById('flashSaleCutType').value,
+        weight_lbs: parseFloat(document.getElementById('flashSaleWeight').value),
+        original_price: parseFloat(document.getElementById('flashSaleOrigPrice').value),
+        sale_price: parseFloat(document.getElementById('flashSaleSalePrice').value),
+        starts_at: document.getElementById('flashSaleStartsAt').value,
+        expires_at: document.getElementById('flashSaleExpiresAt').value,
+        image_system_name: document.getElementById('flashSaleIcon').value,
+        is_active: document.getElementById('flashSaleActive').checked
+    };
+    if (saleId) data.id = parseInt(saleId);
+
+    try {
+        const response = await fetch('/api/flash-sales', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast(saleId ? 'Flash sale updated' : 'Flash sale pushed to app');
+            closeFlashSaleModal();
+            loadFlashSales();
+        } else {
+            showToast(result.error || 'Failed to save', 'error');
+        }
+    } catch (error) {
+        showToast('Error saving flash sale', 'error');
+    }
+}
+
+async function deleteFlashSale(saleId) {
+    if (!confirm('Delete this flash sale?')) return;
+    try {
+        const response = await fetch(`/api/flash-sales/${saleId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Flash sale deleted');
+            loadFlashSales();
+        } else {
+            showToast(data.error || 'Failed to delete', 'error');
+        }
+    } catch (error) {
+        showToast('Error deleting flash sale', 'error');
+    }
+}
+
+// =============================================================================
+// App Command & Control - Pop-Up Locations
+// =============================================================================
+
+async function loadPopUpLocations() {
+    try {
+        const response = await fetch('/api/popup-locations');
+        const locations = await response.json();
+        renderPopUpTable(locations);
+    } catch (error) {
+        console.error('Error loading pop-up locations:', error);
+    }
+}
+
+function renderPopUpTable(locations) {
+    const tbody = document.getElementById('popUpTableBody');
+    const empty = document.getElementById('popUpEmpty');
+    if (!tbody) return;
+
+    if (locations.length === 0) {
+        tbody.innerHTML = '';
+        if (empty) empty.style.display = 'flex';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = locations.map(loc => {
+        const date = new Date(loc.date);
+        const endDate = loc.end_date ? new Date(loc.end_date) : null;
+        const isPast = date < new Date();
+        const statusClass = !loc.is_active ? 'inactive' : isPast ? 'expired' : 'active';
+        const statusText = !loc.is_active ? 'Inactive' : isPast ? 'Past' : 'Upcoming';
+        const timeStr = endDate
+            ? `${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+            : date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        return `<tr>
+            <td><strong>${escapeHtml(loc.title)}</strong></td>
+            <td>${escapeHtml(loc.location)}</td>
+            <td>${date.toLocaleDateString()}</td>
+            <td>${timeStr}</td>
+            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
+            <td>
+                <button class="btn btn-sm btn-icon" onclick="editPopUpLocation(${loc.id})" title="Edit"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deletePopUpLocation(${loc.id})" title="Delete"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showPopUpModal(locId = null) {
+    document.getElementById('popUpId').value = '';
+    document.getElementById('popUpTitle').value = '';
+    document.getElementById('popUpLocation').value = '';
+    document.getElementById('popUpIcon').value = 'leaf.fill';
+    document.getElementById('popUpActive').checked = true;
+    document.getElementById('popUpDate').value = '';
+    document.getElementById('popUpEndDate').value = '';
+
+    document.getElementById('popUpModalTitle').innerHTML = '<i class="fas fa-map-marker-alt"></i> New Pop-Up Location';
+    document.getElementById('popUpModal').classList.add('show');
+}
+
+function closePopUpModal() {
+    document.getElementById('popUpModal').classList.remove('show');
+}
+
+async function editPopUpLocation(locId) {
+    try {
+        const response = await fetch('/api/popup-locations');
+        const locations = await response.json();
+        const loc = locations.find(l => l.id === locId);
+        if (!loc) return;
+
+        document.getElementById('popUpId').value = loc.id;
+        document.getElementById('popUpTitle').value = loc.title;
+        document.getElementById('popUpLocation').value = loc.location;
+        document.getElementById('popUpIcon').value = loc.icon;
+        document.getElementById('popUpActive').checked = loc.is_active;
+
+        if (loc.date) document.getElementById('popUpDate').value = toLocalISOString(new Date(loc.date));
+        if (loc.end_date) document.getElementById('popUpEndDate').value = toLocalISOString(new Date(loc.end_date));
+
+        document.getElementById('popUpModalTitle').innerHTML = '<i class="fas fa-map-marker-alt"></i> Edit Pop-Up Location';
+        document.getElementById('popUpModal').classList.add('show');
+    } catch (error) {
+        showToast('Error loading location details', 'error');
+    }
+}
+
+async function savePopUpLocation(event) {
+    event.preventDefault();
+    const locId = document.getElementById('popUpId').value;
+    const data = {
+        title: document.getElementById('popUpTitle').value,
+        location: document.getElementById('popUpLocation').value,
+        date: document.getElementById('popUpDate').value,
+        end_date: document.getElementById('popUpEndDate').value || null,
+        icon: document.getElementById('popUpIcon').value,
+        is_active: document.getElementById('popUpActive').checked
+    };
+    if (locId) data.id = parseInt(locId);
+
+    try {
+        const response = await fetch('/api/popup-locations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast(locId ? 'Location updated' : 'Location added');
+            closePopUpModal();
+            loadPopUpLocations();
+        } else {
+            showToast(result.error || 'Failed to save', 'error');
+        }
+    } catch (error) {
+        showToast('Error saving location', 'error');
+    }
+}
+
+async function deletePopUpLocation(locId) {
+    if (!confirm('Delete this pop-up location?')) return;
+    try {
+        const response = await fetch(`/api/popup-locations/${locId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Location deleted');
+            loadPopUpLocations();
+        } else {
+            showToast(data.error || 'Failed to delete', 'error');
+        }
+    } catch (error) {
+        showToast('Error deleting location', 'error');
+    }
+}
+
+// =============================================================================
+// App Command & Control - Square Config & Stats
+// =============================================================================
+
+async function loadAppControlStats() {
+    // Load Square status
+    try {
+        const resp = await fetch('/api/square/config');
+        const data = await resp.json();
+        const el = document.getElementById('squareStatus');
+        if (el) {
+            el.textContent = data.configured && data.has_token ? 'Connected' : 'Not Configured';
+            el.className = 'cc-stat-value ' + (data.configured && data.has_token ? 'connected' : '');
+        }
+    } catch (e) {}
+
+    // Load device count
+    try {
+        const resp = await fetch('/api/devices');
+        const devices = await resp.json();
+        const el = document.getElementById('deviceCount');
+        if (el) el.textContent = Array.isArray(devices) ? devices.length : '0';
+    } catch (e) {}
+}
+
+function showSquareConfigModal() {
+    fetch('/api/square/config')
+        .then(r => r.json())
+        .then(data => {
+            if (data.configured) {
+                document.getElementById('squareLocationId').value = data.location_id || '';
+                document.getElementById('squareEnvironment').value = data.environment || 'production';
+            }
+        })
+        .catch(() => {});
+    document.getElementById('squareConfigModal').classList.add('show');
+}
+
+function closeSquareConfigModal() {
+    document.getElementById('squareConfigModal').classList.remove('show');
+}
+
+async function saveSquareConfig(event) {
+    event.preventDefault();
+    const data = {
+        access_token: document.getElementById('squareAccessToken').value,
+        location_id: document.getElementById('squareLocationId').value,
+        environment: document.getElementById('squareEnvironment').value
+    };
+
+    try {
+        const response = await fetch('/api/square/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast('Square configuration saved');
+            closeSquareConfigModal();
+            loadAppControlStats();
+        } else {
+            showToast(result.error || 'Failed to save', 'error');
+        }
+    } catch (error) {
+        showToast('Error saving configuration', 'error');
+    }
+}
+
+// Helper: convert Date to local datetime-local input value
+function toLocalISOString(date) {
+    const offset = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - offset * 60 * 1000);
+    return local.toISOString().slice(0, 16);
 }

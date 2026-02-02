@@ -243,6 +243,85 @@ class EcoFlowReading(db.Model):
         }
 
 
+class SquareConfig(db.Model):
+    """Square API configuration"""
+    id = db.Column(db.Integer, primary_key=True)
+    access_token = db.Column(db.String(255))
+    location_id = db.Column(db.String(100))
+    environment = db.Column(db.String(20), default='production')  # sandbox or production
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AppFlashSale(db.Model):
+    """Flash sales pushed to the mobile app"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    cut_type = db.Column(db.String(50), default='Custom Box')
+    original_price = db.Column(db.Float, nullable=False)
+    sale_price = db.Column(db.Float, nullable=False)
+    weight_lbs = db.Column(db.Float, default=1.0)
+    starts_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    image_system_name = db.Column(db.String(100), default='flame.fill')
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description or '',
+            'cut_type': self.cut_type,
+            'original_price': self.original_price,
+            'sale_price': self.sale_price,
+            'weight_lbs': self.weight_lbs,
+            'starts_at': self.starts_at.isoformat() if self.starts_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'image_system_name': self.image_system_name,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class PopUpLocation(db.Model):
+    """Pop-up locations / farmers market events"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    location = db.Column(db.String(500), nullable=False)
+    date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime)
+    icon = db.Column(db.String(100), default='leaf.fill')
+    is_recurring = db.Column(db.Boolean, default=False)
+    recurrence_rule = db.Column(db.String(50))  # e.g. 'weekly_sunday', 'weekly_friday'
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'location': self.location,
+            'date': self.date.isoformat() if self.date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'icon': self.icon,
+            'is_recurring': self.is_recurring,
+            'recurrence_rule': self.recurrence_rule,
+            'is_active': self.is_active
+        }
+
+
+class DeviceToken(db.Model):
+    """Push notification device tokens"""
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(500), unique=True, nullable=False)
+    platform = db.Column(db.String(20), default='ios')
+    is_active = db.Column(db.Boolean, default=True)
+    registered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # =============================================================================
 # User Loader
 # =============================================================================
@@ -1964,6 +2043,327 @@ def apply_update():
         return jsonify({'error': 'Timeout applying update'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Square Catalog API Integration
+# =============================================================================
+
+class SquareAPI:
+    PRODUCTION_URL = "https://connect.squareup.com/v2"
+    SANDBOX_URL = "https://connect.squareupsandbox.com/v2"
+
+    @staticmethod
+    def get_config():
+        return SquareConfig.query.first()
+
+    @staticmethod
+    def get_base_url(config=None):
+        if not config:
+            config = SquareAPI.get_config()
+        if config and config.environment == 'sandbox':
+            return SquareAPI.SANDBOX_URL
+        return SquareAPI.PRODUCTION_URL
+
+    @staticmethod
+    def get_catalog():
+        config = SquareAPI.get_config()
+        if not config or not config.access_token:
+            return None
+
+        base_url = SquareAPI.get_base_url(config)
+        headers = {
+            'Square-Version': '2024-01-18',
+            'Authorization': f'Bearer {config.access_token}',
+            'Content-Type': 'application/json'
+        }
+
+        try:
+            # Fetch catalog items
+            items = []
+            cursor = None
+            while True:
+                params = {'types': 'ITEM'}
+                if cursor:
+                    params['cursor'] = cursor
+                resp = requests.get(f'{base_url}/catalog/list', headers=headers, params=params, timeout=15)
+                if resp.status_code != 200:
+                    print(f"Square API error: {resp.status_code} {resp.text}")
+                    return None
+                data = resp.json()
+                for obj in data.get('objects', []):
+                    item_data = obj.get('item_data', {})
+                    variations = []
+                    for var in item_data.get('variations', []):
+                        var_data = var.get('item_variation_data', {})
+                        price_money = var_data.get('price_money', {})
+                        variations.append({
+                            'id': var.get('id', ''),
+                            'name': var_data.get('name', ''),
+                            'price_cents': price_money.get('amount') if price_money else None
+                        })
+                    items.append({
+                        'id': obj.get('id', ''),
+                        'name': item_data.get('name', ''),
+                        'description': item_data.get('description', ''),
+                        'category': item_data.get('category', {}).get('name', ''),
+                        'variations': variations
+                    })
+                cursor = data.get('cursor')
+                if not cursor:
+                    break
+            return items
+        except Exception as e:
+            print(f"Square catalog fetch error: {e}")
+            return None
+
+
+# =============================================================================
+# Public API Endpoints (No Auth Required - for Mobile App)
+# =============================================================================
+
+@app.route('/api/public/flash-sales', methods=['GET'])
+def public_flash_sales():
+    """Return active flash sales for the mobile app"""
+    sales = AppFlashSale.query.filter_by(is_active=True).order_by(AppFlashSale.expires_at.asc()).all()
+    return jsonify([s.to_dict() for s in sales])
+
+
+@app.route('/api/public/catalog', methods=['GET'])
+def public_catalog():
+    """Return Square catalog items for the mobile app"""
+    items = SquareAPI.get_catalog()
+    if items is None:
+        return jsonify({'items': [], 'source': 'unavailable'})
+    return jsonify({'items': items, 'source': 'square'})
+
+
+@app.route('/api/public/events', methods=['GET'])
+def public_events():
+    """Return upcoming pop-up locations/events for the mobile app"""
+    events = PopUpLocation.query.filter_by(is_active=True).filter(
+        PopUpLocation.date >= datetime.utcnow()
+    ).order_by(PopUpLocation.date.asc()).all()
+    return jsonify([e.to_dict() for e in events])
+
+
+@app.route('/api/public/register-device', methods=['POST'])
+def public_register_device():
+    """Register a device for push notifications"""
+    data = request.get_json()
+    if not data or not data.get('token'):
+        return jsonify({'error': 'Token required'}), 400
+
+    token = data['token']
+    platform = data.get('platform', 'ios')
+
+    existing = DeviceToken.query.filter_by(token=token).first()
+    if existing:
+        existing.last_seen = datetime.utcnow()
+        existing.is_active = True
+        db.session.commit()
+        return jsonify({'success': True, 'status': 'updated'})
+
+    device = DeviceToken(token=token, platform=platform)
+    db.session.add(device)
+    db.session.commit()
+    return jsonify({'success': True, 'status': 'registered'})
+
+
+# =============================================================================
+# Admin: Flash Sales Management
+# =============================================================================
+
+@app.route('/api/flash-sales', methods=['GET'])
+@login_required
+def get_flash_sales():
+    """Get all flash sales (admin view - includes inactive)"""
+    sales = AppFlashSale.query.order_by(AppFlashSale.created_at.desc()).all()
+    return jsonify([s.to_dict() for s in sales])
+
+
+@app.route('/api/flash-sales', methods=['POST'])
+@login_required
+def create_flash_sale():
+    """Create or update a flash sale"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    sale_id = data.get('id')
+    if sale_id:
+        sale = AppFlashSale.query.get(sale_id)
+        if not sale:
+            return jsonify({'error': 'Sale not found'}), 404
+    else:
+        sale = AppFlashSale()
+        db.session.add(sale)
+
+    sale.title = data.get('title', sale.title if sale_id else 'Flash Sale')
+    sale.description = data.get('description', '')
+    sale.cut_type = data.get('cut_type', 'Custom Box')
+    sale.original_price = float(data.get('original_price', 0))
+    sale.sale_price = float(data.get('sale_price', 0))
+    sale.weight_lbs = float(data.get('weight_lbs', 1.0))
+    sale.image_system_name = data.get('image_system_name', 'flame.fill')
+    sale.is_active = data.get('is_active', True)
+
+    if data.get('starts_at'):
+        sale.starts_at = datetime.fromisoformat(data['starts_at'].replace('Z', '+00:00').replace('+00:00', ''))
+    if data.get('expires_at'):
+        sale.expires_at = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00').replace('+00:00', ''))
+    else:
+        sale.expires_at = datetime.utcnow() + timedelta(hours=24)
+
+    db.session.commit()
+    return jsonify({'success': True, 'sale': sale.to_dict()})
+
+
+@app.route('/api/flash-sales/<int:sale_id>', methods=['DELETE'])
+@login_required
+def delete_flash_sale(sale_id):
+    """Delete a flash sale"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    sale = AppFlashSale.query.get(sale_id)
+    if not sale:
+        return jsonify({'error': 'Sale not found'}), 404
+
+    db.session.delete(sale)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# =============================================================================
+# Admin: Pop-Up Locations Management
+# =============================================================================
+
+@app.route('/api/popup-locations', methods=['GET'])
+@login_required
+def get_popup_locations():
+    """Get all pop-up locations"""
+    locations = PopUpLocation.query.order_by(PopUpLocation.date.desc()).all()
+    return jsonify([l.to_dict() for l in locations])
+
+
+@app.route('/api/popup-locations', methods=['POST'])
+@login_required
+def create_popup_location():
+    """Create or update a pop-up location"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    loc_id = data.get('id')
+    if loc_id:
+        loc = PopUpLocation.query.get(loc_id)
+        if not loc:
+            return jsonify({'error': 'Location not found'}), 404
+    else:
+        loc = PopUpLocation()
+        db.session.add(loc)
+
+    loc.title = data.get('title', loc.title if loc_id else 'Pop-Up Location')
+    loc.location = data.get('location', loc.location if loc_id else '')
+    loc.icon = data.get('icon', 'leaf.fill')
+    loc.is_recurring = data.get('is_recurring', False)
+    loc.recurrence_rule = data.get('recurrence_rule', '')
+    loc.is_active = data.get('is_active', True)
+
+    if data.get('date'):
+        loc.date = datetime.fromisoformat(data['date'].replace('Z', '+00:00').replace('+00:00', ''))
+    if data.get('end_date'):
+        loc.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00').replace('+00:00', ''))
+
+    db.session.commit()
+    return jsonify({'success': True, 'location': loc.to_dict()})
+
+
+@app.route('/api/popup-locations/<int:loc_id>', methods=['DELETE'])
+@login_required
+def delete_popup_location(loc_id):
+    """Delete a pop-up location"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    loc = PopUpLocation.query.get(loc_id)
+    if not loc:
+        return jsonify({'error': 'Location not found'}), 404
+
+    db.session.delete(loc)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# =============================================================================
+# Admin: Square Configuration
+# =============================================================================
+
+@app.route('/api/square/config', methods=['GET'])
+@login_required
+def get_square_config():
+    """Get Square API configuration"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    config = SquareConfig.query.first()
+    if not config:
+        return jsonify({'configured': False})
+    return jsonify({
+        'configured': True,
+        'location_id': config.location_id or '',
+        'environment': config.environment,
+        'has_token': bool(config.access_token)
+    })
+
+
+@app.route('/api/square/config', methods=['POST'])
+@login_required
+def save_square_config():
+    """Save Square API configuration"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    data = request.get_json()
+    config = SquareConfig.query.first()
+    if not config:
+        config = SquareConfig()
+        db.session.add(config)
+
+    if data.get('access_token'):
+        config.access_token = data['access_token']
+    if data.get('location_id'):
+        config.location_id = data['location_id']
+    if data.get('environment'):
+        config.environment = data['environment']
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/devices', methods=['GET'])
+@login_required
+def get_registered_devices():
+    """Get registered push notification devices"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    devices = DeviceToken.query.order_by(DeviceToken.registered_at.desc()).all()
+    return jsonify([{
+        'id': d.id,
+        'platform': d.platform,
+        'is_active': d.is_active,
+        'registered_at': d.registered_at.isoformat() if d.registered_at else None,
+        'last_seen': d.last_seen.isoformat() if d.last_seen else None,
+        'token_preview': d.token[:12] + '...' if d.token else ''
+    } for d in devices])
 
 
 # =============================================================================
