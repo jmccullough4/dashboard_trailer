@@ -2207,9 +2207,15 @@ function renderPopUpTable(locations) {
             ? `${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
             : date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
+        const hasCoords = loc.latitude && loc.longitude;
+        const coordsStr = hasCoords
+            ? `<a href="https://maps.google.com/?q=${loc.latitude},${loc.longitude}" target="_blank" class="coords-link" title="Open in Google Maps">${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}</a>`
+            : '<span class="text-muted">--</span>';
+
         return `<tr>
             <td><strong>${escapeHtml(loc.title)}</strong></td>
             <td>${escapeHtml(loc.location)}</td>
+            <td>${coordsStr}</td>
             <td>${date.toLocaleDateString()}</td>
             <td>${timeStr}</td>
             <td><span class="cc-status ${statusClass}">${statusText}</span></td>
@@ -2225,10 +2231,13 @@ function showPopUpModal(locId = null) {
     document.getElementById('popUpId').value = '';
     document.getElementById('popUpTitle').value = '';
     document.getElementById('popUpLocation').value = '';
+    document.getElementById('popUpLatitude').value = '';
+    document.getElementById('popUpLongitude').value = '';
     document.getElementById('popUpIcon').value = 'leaf.fill';
     document.getElementById('popUpActive').checked = true;
     document.getElementById('popUpDate').value = '';
     document.getElementById('popUpEndDate').value = '';
+    clearGeocodeStatus();
 
     document.getElementById('popUpModalTitle').innerHTML = '<i class="fas fa-map-marker-alt"></i> New Pop-Up Location';
     document.getElementById('popUpModal').classList.add('show');
@@ -2248,8 +2257,11 @@ async function editPopUpLocation(locId) {
         document.getElementById('popUpId').value = loc.id;
         document.getElementById('popUpTitle').value = loc.title;
         document.getElementById('popUpLocation').value = loc.location;
+        document.getElementById('popUpLatitude').value = loc.latitude || '';
+        document.getElementById('popUpLongitude').value = loc.longitude || '';
         document.getElementById('popUpIcon').value = loc.icon;
         document.getElementById('popUpActive').checked = loc.is_active;
+        clearGeocodeStatus();
 
         if (loc.date) document.getElementById('popUpDate').value = toLocalISOString(new Date(loc.date));
         if (loc.end_date) document.getElementById('popUpEndDate').value = toLocalISOString(new Date(loc.end_date));
@@ -2261,12 +2273,75 @@ async function editPopUpLocation(locId) {
     }
 }
 
+async function geocodePopUpAddress() {
+    const address = document.getElementById('popUpLocation').value.trim();
+    if (!address) { showToast('Enter an address first', 'error'); return; }
+
+    setGeocodeStatus('Looking up coordinates...', 'loading');
+    try {
+        const response = await fetch('/api/geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+        });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('popUpLatitude').value = data.latitude.toFixed(6);
+            document.getElementById('popUpLongitude').value = data.longitude.toFixed(6);
+            setGeocodeStatus(`Found: ${data.display_name}`, 'success');
+        } else {
+            setGeocodeStatus(data.error || 'Address not found', 'error');
+        }
+    } catch (error) {
+        setGeocodeStatus('Geocode request failed', 'error');
+    }
+}
+
+async function reverseGeocodePopUp() {
+    const lat = document.getElementById('popUpLatitude').value;
+    const lng = document.getElementById('popUpLongitude').value;
+    if (!lat || !lng) { showToast('Enter lat/lng first', 'error'); return; }
+
+    setGeocodeStatus('Looking up address...', 'loading');
+    try {
+        const response = await fetch('/api/reverse-geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude: parseFloat(lat), longitude: parseFloat(lng) })
+        });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('popUpLocation').value = data.address;
+            setGeocodeStatus('Address found from coordinates', 'success');
+        } else {
+            setGeocodeStatus(data.error || 'Location not found', 'error');
+        }
+    } catch (error) {
+        setGeocodeStatus('Reverse geocode failed', 'error');
+    }
+}
+
+function setGeocodeStatus(msg, type) {
+    const el = document.getElementById('geocodeStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'geocode-status ' + type;
+    el.style.display = 'block';
+}
+
+function clearGeocodeStatus() {
+    const el = document.getElementById('geocodeStatus');
+    if (el) { el.textContent = ''; el.style.display = 'none'; }
+}
+
 async function savePopUpLocation(event) {
     event.preventDefault();
     const locId = document.getElementById('popUpId').value;
     const data = {
         title: document.getElementById('popUpTitle').value,
         location: document.getElementById('popUpLocation').value,
+        latitude: document.getElementById('popUpLatitude').value || null,
+        longitude: document.getElementById('popUpLongitude').value || null,
         date: document.getElementById('popUpDate').value,
         end_date: document.getElementById('popUpEndDate').value || null,
         icon: document.getElementById('popUpIcon').value,
