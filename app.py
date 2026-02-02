@@ -329,6 +329,8 @@ class DeviceToken(db.Model):
     """Push notification device tokens"""
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(500), unique=True, nullable=False)
+    device_id = db.Column(db.String(100))  # Persistent UUID per device
+    device_name = db.Column(db.String(200))  # e.g. "John's iPhone 15"
     platform = db.Column(db.String(20), default='ios')
     is_active = db.Column(db.Boolean, default=True)
     registered_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -2231,15 +2233,35 @@ def public_register_device():
 
     token = data['token']
     platform = data.get('platform', 'ios')
+    device_id = data.get('device_id', '')
+    device_name = data.get('device_name', '')
 
+    # If device_id provided, find by device_id first (handles token changes)
+    existing = None
+    if device_id:
+        existing = DeviceToken.query.filter_by(device_id=device_id).first()
+        if existing:
+            existing.token = token
+            existing.last_seen = datetime.utcnow()
+            existing.is_active = True
+            if device_name:
+                existing.device_name = device_name
+            db.session.commit()
+            return jsonify({'success': True, 'status': 'updated'})
+
+    # Fall back to finding by token
     existing = DeviceToken.query.filter_by(token=token).first()
     if existing:
         existing.last_seen = datetime.utcnow()
         existing.is_active = True
+        if device_id:
+            existing.device_id = device_id
+        if device_name:
+            existing.device_name = device_name
         db.session.commit()
         return jsonify({'success': True, 'status': 'updated'})
 
-    device = DeviceToken(token=token, platform=platform)
+    device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name)
     db.session.add(device)
     db.session.commit()
     return jsonify({'success': True, 'status': 'registered'})
@@ -2546,6 +2568,8 @@ def get_registered_devices():
     devices = DeviceToken.query.order_by(DeviceToken.registered_at.desc()).all()
     return jsonify([{
         'id': d.id,
+        'device_id': d.device_id or '',
+        'device_name': d.device_name or '',
         'platform': d.platform,
         'is_active': d.is_active,
         'registered_at': d.registered_at.isoformat() if d.registered_at else None,
@@ -2600,6 +2624,25 @@ def migrate_db():
                         db.session.execute(text(f'ALTER TABLE pop_up_location ADD COLUMN {col_name} {col_type}'))
                         db.session.commit()
                         print(f"Added column '{col_name}' to pop_up_location table")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"Could not add column '{col_name}': {e}")
+
+        # Migrate device_token table
+        if 'device_token' in inspector.get_table_names():
+            existing_columns = [col['name'] for col in inspector.get_columns('device_token')]
+
+            columns_to_add = {
+                'device_id': 'VARCHAR(100)',
+                'device_name': 'VARCHAR(200)'
+            }
+
+            for col_name, col_type in columns_to_add.items():
+                if col_name not in existing_columns:
+                    try:
+                        db.session.execute(text(f'ALTER TABLE device_token ADD COLUMN {col_name} {col_type}'))
+                        db.session.commit()
+                        print(f"Added column '{col_name}' to device_token table")
                     except Exception as e:
                         db.session.rollback()
                         print(f"Could not add column '{col_name}': {e}")
