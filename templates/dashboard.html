@@ -344,6 +344,36 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Registered Devices Panel -->
+                <div class="cc-panel">
+                    <div class="cc-panel-header">
+                        <h4><i class="fas fa-mobile-alt"></i> Registered Devices</h4>
+                        <div>
+                            <button class="btn btn-sm btn-secondary" onclick="loadDeviceList()" title="Refresh">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="resetAllDevices()" title="Reset All Devices">
+                                <i class="fas fa-trash-alt"></i> Reset All
+                            </button>
+                        </div>
+                    </div>
+                    <table class="cc-table">
+                        <thead>
+                            <tr>
+                                <th>Device Name</th>
+                                <th>Platform</th>
+                                <th>Token</th>
+                                <th>Last Seen</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devicesTableBody">
+                            <tr><td colspan="6" style="text-align:center; opacity:0.5;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
             {% endif %}
 

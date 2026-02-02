@@ -2068,18 +2068,18 @@ def send_push_notification(title, body, badge=1):
     """Send push notification to all registered iOS devices"""
     if not APNS_AVAILABLE:
         print("APNs not available - apns2 package not installed")
-        return 0
+        return {'sent': 0, 'error': 'apns2 not installed'}
 
     # Load APNs config from environment or app config
     key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_A9VMASUDQ9.p8')
     key_id = os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9')
     team_id = os.environ.get('APNS_TEAM_ID', 'GM432NV6J6')
     bundle_id = os.environ.get('APNS_BUNDLE_ID', 'com.threestrandscattle.app')
-    use_sandbox = os.environ.get('APNS_SANDBOX', 'false').lower() == 'true'
+    use_sandbox = os.environ.get('APNS_SANDBOX', 'true').lower() == 'true'
 
     if not os.path.exists(key_path):
         print(f"APNs key file not found: {key_path}")
-        return 0
+        return {'sent': 0, 'error': f'Key file not found: {key_path}'}
 
     try:
         token_credentials = TokenCredentials(
@@ -2100,23 +2100,34 @@ def send_push_notification(title, body, badge=1):
         all_tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
         tokens = [d for d in all_tokens if d.token and len(d.token) >= 64 and all(c in '0123456789abcdef' for c in d.token.lower())]
         if not tokens:
-            print(f"No valid APNs tokens to notify ({len(all_tokens)} total devices)")
-            return 0
+            msg = f"No valid APNs tokens ({len(all_tokens)} total devices)"
+            print(msg)
+            return {'sent': 0, 'total_devices': len(all_tokens), 'valid_tokens': 0, 'error': msg}
 
         sent = 0
+        errors = []
         for device in tokens:
             try:
                 client.send_notification(device.token, payload, bundle_id)
                 sent += 1
             except Exception as e:
-                print(f"Failed to send to {device.token[:12]}...: {e}")
+                err_str = str(e)
+                print(f"Failed to send to {device.token[:12]}...: {err_str}")
+                errors.append(err_str)
                 # Mark bad tokens as inactive
-                if 'BadDeviceToken' in str(e) or 'Unregistered' in str(e):
+                if 'BadDeviceToken' in err_str or 'Unregistered' in err_str:
                     device.is_active = False
 
         db.session.commit()
         print(f"Push notifications sent: {sent}/{len(tokens)}")
-        return sent
+        result = {'sent': sent, 'total_devices': len(all_tokens), 'valid_tokens': len(tokens), 'sandbox': use_sandbox}
+        if errors:
+            result['errors'] = errors
+        return result
+
+    except Exception as e:
+        print(f"APNs error: {e}")
+        return {'sent': 0, 'error': str(e)}
 
     except Exception as e:
         print(f"APNs error: {e}")
@@ -2565,11 +2576,11 @@ def test_push_notification():
     if not current_user.is_admin:
         return jsonify({'error': 'Admin required'}), 403
 
-    sent = send_push_notification(
+    result = send_push_notification(
         "3 Strands Test",
         "Push notifications are working! You'll receive alerts for flash sales and pop-up locations."
     )
-    return jsonify({'success': True, 'sent': sent})
+    return jsonify({'success': result.get('sent', 0) > 0, **result})
 
 
 @app.route('/api/devices', methods=['GET'])
@@ -2590,6 +2601,30 @@ def get_registered_devices():
         'last_seen': d.last_seen.isoformat() if d.last_seen else None,
         'token_preview': d.token[:12] + '...' if d.token else ''
     } for d in devices])
+
+
+@app.route('/api/devices/reset', methods=['DELETE'])
+@login_required
+def reset_all_devices():
+    """Clear all registered device tokens"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    count = DeviceToken.query.count()
+    DeviceToken.query.delete()
+    db.session.commit()
+    return jsonify({'success': True, 'deleted': count})
+
+
+@app.route('/api/devices/<int:device_id>', methods=['DELETE'])
+@login_required
+def delete_device(device_id):
+    """Delete a single registered device"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    device = DeviceToken.query.get_or_404(device_id)
+    db.session.delete(device)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 # =============================================================================

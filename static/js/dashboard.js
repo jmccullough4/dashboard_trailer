@@ -2424,6 +2424,65 @@ async function loadAppControlStats() {
             }
         }
     } catch (e) {}
+
+    // Also load device list
+    loadDeviceList();
+}
+
+async function loadDeviceList() {
+    try {
+        const resp = await fetch('/api/devices');
+        const devices = await resp.json();
+        const tbody = document.getElementById('devicesTableBody');
+        if (!tbody) return;
+        if (!Array.isArray(devices) || devices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">No devices registered</td></tr>';
+            return;
+        }
+        tbody.innerHTML = devices.map(d => {
+            const lastSeen = d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never';
+            const status = d.is_active
+                ? '<span class="cc-status active">Active</span>'
+                : '<span class="cc-status">Inactive</span>';
+            return `<tr>
+                <td>${d.device_name || 'Unknown'}</td>
+                <td>${d.platform || 'ios'}</td>
+                <td><code>${d.token_preview}</code></td>
+                <td>${lastSeen}</td>
+                <td>${status}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="deleteDevice(${d.id})" title="Remove"><i class="fas fa-times"></i></button></td>
+            </tr>`;
+        }).join('');
+    } catch (e) {}
+}
+
+async function resetAllDevices() {
+    if (!confirm('Remove ALL registered devices? They will need to re-register from the app.')) return;
+    try {
+        const resp = await fetch('/api/devices/reset', { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+            showToast(`Removed ${data.deleted} device(s)`);
+            loadDeviceList();
+            loadAppControlStats();
+        }
+    } catch (e) {
+        showToast('Error resetting devices', 'error');
+    }
+}
+
+async function deleteDevice(id) {
+    try {
+        const resp = await fetch(`/api/devices/${id}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+            showToast('Device removed');
+            loadDeviceList();
+            loadAppControlStats();
+        }
+    } catch (e) {
+        showToast('Error removing device', 'error');
+    }
 }
 
 async function testPushNotification() {
@@ -2432,9 +2491,10 @@ async function testPushNotification() {
         const resp = await fetch('/api/apns/test', { method: 'POST' });
         const data = await resp.json();
         if (data.success) {
-            showToast(`Test push sent to ${data.sent} device(s)`);
+            showToast(`Push sent to ${data.sent}/${data.valid_tokens || '?'} device(s)${data.sandbox ? ' (sandbox)' : ''}`);
         } else {
-            showToast(data.error || 'Failed to send', 'error');
+            const detail = data.errors ? `: ${data.errors.join(', ')}` : '';
+            showToast((data.error || 'Failed to send') + detail, 'error');
         }
     } catch (e) {
         showToast('Error sending test push', 'error');
