@@ -2477,6 +2477,16 @@ def init_db():
             db.session.commit()
             print("Created default admin user (admin/admin)")
 
+        # Seed Square config if not exists
+        if not SquareConfig.query.first():
+            square = SquareConfig(
+                access_token='EAAAl23jxhQmIejnibi8LPDjN9LLCkW2JhrrfnknRYoq_CuY0Kb6jJ0NRu8ucheC',
+                environment='production'
+            )
+            db.session.add(square)
+            db.session.commit()
+            print("Seeded Square API configuration")
+
 
 # =============================================================================
 # Main
