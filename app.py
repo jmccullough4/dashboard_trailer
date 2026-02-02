@@ -2436,10 +2436,10 @@ def get_registered_devices():
 def migrate_db():
     """Add missing columns to existing database"""
     with app.app_context():
-        # Check and add missing columns to user table
         from sqlalchemy import inspect, text
         inspector = inspect(db.engine)
 
+        # Migrate user table
         if 'user' in inspector.get_table_names():
             existing_columns = [col['name'] for col in inspector.get_columns('user')]
 
@@ -2456,6 +2456,25 @@ def migrate_db():
                         db.session.execute(text(f'ALTER TABLE user ADD COLUMN {col_name} {col_type}'))
                         db.session.commit()
                         print(f"Added column '{col_name}' to user table")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"Could not add column '{col_name}': {e}")
+
+        # Migrate pop_up_location table
+        if 'pop_up_location' in inspector.get_table_names():
+            existing_columns = [col['name'] for col in inspector.get_columns('pop_up_location')]
+
+            columns_to_add = {
+                'latitude': 'FLOAT',
+                'longitude': 'FLOAT'
+            }
+
+            for col_name, col_type in columns_to_add.items():
+                if col_name not in existing_columns:
+                    try:
+                        db.session.execute(text(f'ALTER TABLE pop_up_location ADD COLUMN {col_name} {col_type}'))
+                        db.session.commit()
+                        print(f"Added column '{col_name}' to pop_up_location table")
                     except Exception as e:
                         db.session.rollback()
                         print(f"Could not add column '{col_name}': {e}")
