@@ -298,6 +298,7 @@
                                 <tr>
                                     <th>Event</th>
                                     <th>Location</th>
+                                    <th>Coords</th>
                                     <th>Date</th>
                                     <th>Time</th>
                                     <th>Status</th>
@@ -845,8 +846,29 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Location / Address</label>
-                        <input type="text" id="popUpLocation" class="form-input" placeholder="4500 El Mar Dr., Lauderdale-by-the-Sea" required>
+                        <div class="input-with-action">
+                            <input type="text" id="popUpLocation" class="form-input" placeholder="4500 El Mar Dr., Lauderdale-by-the-Sea" required>
+                            <button type="button" class="btn btn-sm btn-accent" onclick="geocodePopUpAddress()" title="Lookup coordinates from address">
+                                <i class="fas fa-search-location"></i>
+                            </button>
+                        </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" id="popUpLatitude" class="form-input" step="any" placeholder="26.1901">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" id="popUpLongitude" class="form-input" step="any" placeholder="-80.0966">
+                        </div>
+                        <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">
+                            <button type="button" class="btn btn-sm btn-accent" onclick="reverseGeocodePopUp()" title="Lookup address from coordinates">
+                                <i class="fas fa-map-pin"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="geocode-status" id="geocodeStatus"></div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Start Date & Time</label>

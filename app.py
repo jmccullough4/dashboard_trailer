@@ -290,6 +290,8 @@ class PopUpLocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     location = db.Column(db.String(500), nullable=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
     date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime)
     icon = db.Column(db.String(100), default='leaf.fill')
@@ -303,6 +305,8 @@ class PopUpLocation(db.Model):
             'id': self.id,
             'title': self.title,
             'location': self.location,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
             'date': self.date.isoformat() if self.date else None,
             'end_date': self.end_date.isoformat() if self.end_date else None,
             'icon': self.icon,
@@ -2272,6 +2276,10 @@ def create_popup_location():
 
     loc.title = data.get('title', loc.title if loc_id else 'Pop-Up Location')
     loc.location = data.get('location', loc.location if loc_id else '')
+    if data.get('latitude') is not None:
+        loc.latitude = float(data['latitude']) if data['latitude'] != '' else None
+    if data.get('longitude') is not None:
+        loc.longitude = float(data['longitude']) if data['longitude'] != '' else None
     loc.icon = data.get('icon', 'leaf.fill')
     loc.is_recurring = data.get('is_recurring', False)
     loc.recurrence_rule = data.get('recurrence_rule', '')
@@ -2346,6 +2354,61 @@ def save_square_config():
 
     db.session.commit()
     return jsonify({'success': True})
+
+
+@app.route('/api/geocode', methods=['POST'])
+@login_required
+def geocode_address():
+    """Geocode an address to lat/lng using OpenStreetMap Nominatim"""
+    data = request.get_json()
+    address = data.get('address', '')
+    if not address:
+        return jsonify({'error': 'Address required'}), 400
+
+    try:
+        resp = requests.get('https://nominatim.openstreetmap.org/search', params={
+            'q': address,
+            'format': 'json',
+            'limit': 1
+        }, headers={'User-Agent': '3StrandsCattleCo-Dashboard/1.0'}, timeout=10)
+        results = resp.json()
+        if results:
+            return jsonify({
+                'success': True,
+                'latitude': float(results[0]['lat']),
+                'longitude': float(results[0]['lon']),
+                'display_name': results[0].get('display_name', '')
+            })
+        return jsonify({'success': False, 'error': 'Address not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/reverse-geocode', methods=['POST'])
+@login_required
+def reverse_geocode():
+    """Reverse geocode lat/lng to an address using OpenStreetMap Nominatim"""
+    data = request.get_json()
+    lat = data.get('latitude')
+    lng = data.get('longitude')
+    if lat is None or lng is None:
+        return jsonify({'error': 'Latitude and longitude required'}), 400
+
+    try:
+        resp = requests.get('https://nominatim.openstreetmap.org/reverse', params={
+            'lat': lat,
+            'lon': lng,
+            'format': 'json'
+        }, headers={'User-Agent': '3StrandsCattleCo-Dashboard/1.0'}, timeout=10)
+        result = resp.json()
+        if result and 'display_name' in result:
+            return jsonify({
+                'success': True,
+                'address': result['display_name']
+            })
+        return jsonify({'success': False, 'error': 'Location not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/devices', methods=['GET'])

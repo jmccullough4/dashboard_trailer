@@ -3185,6 +3185,69 @@ select.form-input {
     color: var(--neon-green);
 }
 
+.input-with-action {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input-with-action .form-input {
+    flex: 1;
+}
+
+.btn-accent {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--neon-blue);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-accent:hover {
+    background: rgba(0, 212, 255, 0.25);
+    border-color: var(--neon-blue);
+}
+
+.geocode-status {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    display: none;
+}
+
+.geocode-status.success {
+    background: rgba(57, 255, 20, 0.1);
+    color: var(--neon-green);
+    border: 1px solid rgba(57, 255, 20, 0.2);
+}
+
+.geocode-status.error {
+    background: rgba(255, 51, 102, 0.1);
+    color: var(--neon-red);
+    border: 1px solid rgba(255, 51, 102, 0.2);
+}
+
+.geocode-status.loading {
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--neon-blue);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+}
+
+.coords-link {
+    color: var(--neon-blue);
+    text-decoration: none;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+}
+
+.coords-link:hover {
+    text-decoration: underline;
+}
+
 @media (max-width: 768px) {
     .cc-stats-row {
         grid-template-columns: 1fr;
