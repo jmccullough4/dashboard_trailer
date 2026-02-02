@@ -47,6 +47,10 @@
                 <span>Files</span>
             </a>
             {% if user.is_admin %}
+            <a href="#" class="nav-item" data-section="appcontrol">
+                <i class="fas fa-mobile-alt"></i>
+                <span>App C&C</span>
+            </a>
             <a href="#" class="nav-item" data-section="admin">
                 <i class="fas fa-users-cog"></i>
                 <span>Admin</span>
@@ -242,6 +246,95 @@
                     </div>
                 </div>
             </section>
+
+            <!-- App Command & Control Section -->
+            {% if user.is_admin %}
+            <section class="section" id="appcontrol-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-mobile-alt"></i> App Command & Control</h3>
+                </div>
+
+                <!-- Flash Sales Management -->
+                <div class="cc-panel">
+                    <div class="cc-panel-header">
+                        <h4><i class="fas fa-bolt"></i> Flash Sales</h4>
+                        <button class="btn btn-primary btn-sm" onclick="showFlashSaleModal()">
+                            <i class="fas fa-plus"></i> New Sale
+                        </button>
+                    </div>
+                    <div class="cc-table-container">
+                        <table class="admin-table" id="flashSalesTable">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Cut Type</th>
+                                    <th>Price</th>
+                                    <th>Sale Price</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="flashSalesTableBody"></tbody>
+                        </table>
+                        <div class="cc-empty" id="flashSalesEmpty" style="display: none;">
+                            <i class="fas fa-tags"></i>
+                            <p>No flash sales yet. Create one to push to the app.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pop-Up Locations Management -->
+                <div class="cc-panel">
+                    <div class="cc-panel-header">
+                        <h4><i class="fas fa-map-marker-alt"></i> Pop-Up Locations</h4>
+                        <button class="btn btn-primary btn-sm" onclick="showPopUpModal()">
+                            <i class="fas fa-plus"></i> New Location
+                        </button>
+                    </div>
+                    <div class="cc-table-container">
+                        <table class="admin-table" id="popUpTable">
+                            <thead>
+                                <tr>
+                                    <th>Event</th>
+                                    <th>Location</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="popUpTableBody"></tbody>
+                        </table>
+                        <div class="cc-empty" id="popUpEmpty" style="display: none;">
+                            <i class="fas fa-map-pin"></i>
+                            <p>No pop-up locations. Add farmers markets and events here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Square & Device Stats -->
+                <div class="cc-stats-row">
+                    <div class="cc-stat-card">
+                        <div class="cc-stat-icon"><i class="fas fa-credit-card"></i></div>
+                        <div class="cc-stat-info">
+                            <span class="cc-stat-label">Square Catalog</span>
+                            <span class="cc-stat-value" id="squareStatus">Checking...</span>
+                        </div>
+                        <button class="btn btn-sm btn-icon" onclick="showSquareConfigModal()" title="Configure">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                    <div class="cc-stat-card">
+                        <div class="cc-stat-icon"><i class="fas fa-mobile-alt"></i></div>
+                        <div class="cc-stat-info">
+                            <span class="cc-stat-label">Registered Devices</span>
+                            <span class="cc-stat-value" id="deviceCount">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
 
             <!-- Admin Section -->
             {% if user.is_admin %}
@@ -644,6 +737,188 @@
                 <div class="progress-bar" id="updateProgressBar"></div>
             </div>
             <p class="update-note">Please wait, the system will restart automatically.</p>
+        </div>
+    </div>
+
+    <!-- Flash Sale Modal -->
+    <div class="modal" id="flashSaleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="flashSaleModalTitle"><i class="fas fa-bolt"></i> New Flash Sale</h3>
+                <button class="modal-close" onclick="closeFlashSaleModal()">&times;</button>
+            </div>
+            <form id="flashSaleForm" onsubmit="saveFlashSale(event)">
+                <input type="hidden" id="flashSaleId" value="">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input type="text" id="flashSaleTitle" class="form-input" placeholder="Weekend Ribeye Blowout" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea id="flashSaleDescription" class="form-input" rows="3" placeholder="Premium Florida-raised beef..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Cut Type</label>
+                            <select id="flashSaleCutType" class="form-input">
+                                <option value="Ribeye">Ribeye</option>
+                                <option value="NY Strip">NY Strip</option>
+                                <option value="Filet Mignon">Filet Mignon</option>
+                                <option value="Sirloin">Sirloin</option>
+                                <option value="Ground Beef">Ground Beef</option>
+                                <option value="Brisket">Brisket</option>
+                                <option value="Chuck Roast">Chuck Roast</option>
+                                <option value="T-Bone">T-Bone</option>
+                                <option value="Bundle">Bundle</option>
+                                <option value="Custom Box">Custom Box</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Weight (lbs)</label>
+                            <input type="number" id="flashSaleWeight" class="form-input" step="0.1" value="1.0" min="0.1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Original Price ($)</label>
+                            <input type="number" id="flashSaleOrigPrice" class="form-input" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Sale Price ($)</label>
+                            <input type="number" id="flashSaleSalePrice" class="form-input" step="0.01" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Starts At</label>
+                            <input type="datetime-local" id="flashSaleStartsAt" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Expires At</label>
+                            <input type="datetime-local" id="flashSaleExpiresAt" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">SF Symbol Icon</label>
+                            <select id="flashSaleIcon" class="form-input">
+                                <option value="flame.fill">Flame</option>
+                                <option value="frying.pan.fill">Frying Pan</option>
+                                <option value="cart.fill">Cart</option>
+                                <option value="shippingbox.fill">Shipping Box</option>
+                                <option value="thermometer.sun.fill">Thermometer</option>
+                                <option value="star.fill">Star</option>
+                                <option value="tag.fill">Tag</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Active</label>
+                            <label class="switch" style="margin-top: 8px;">
+                                <input type="checkbox" id="flashSaleActive" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeFlashSaleModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Push to App</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pop-Up Location Modal -->
+    <div class="modal" id="popUpModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="popUpModalTitle"><i class="fas fa-map-marker-alt"></i> New Pop-Up Location</h3>
+                <button class="modal-close" onclick="closePopUpModal()">&times;</button>
+            </div>
+            <form id="popUpForm" onsubmit="savePopUpLocation(event)">
+                <input type="hidden" id="popUpId" value="">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Event Name</label>
+                        <input type="text" id="popUpTitle" class="form-input" placeholder="Lauderdale by the Sea Market" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Location / Address</label>
+                        <input type="text" id="popUpLocation" class="form-input" placeholder="4500 El Mar Dr., Lauderdale-by-the-Sea" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Start Date & Time</label>
+                            <input type="datetime-local" id="popUpDate" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">End Date & Time</label>
+                            <input type="datetime-local" id="popUpEndDate" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Icon (SF Symbol)</label>
+                            <select id="popUpIcon" class="form-input">
+                                <option value="leaf.fill">Leaf (Market)</option>
+                                <option value="storefront.fill">Storefront</option>
+                                <option value="cart.fill">Cart</option>
+                                <option value="mappin.circle.fill">Map Pin</option>
+                                <option value="star.fill">Star</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Active</label>
+                            <label class="switch" style="margin-top: 8px;">
+                                <input type="checkbox" id="popUpActive" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closePopUpModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Location</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Square Config Modal -->
+    <div class="modal" id="squareConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-credit-card"></i> Square Configuration</h3>
+                <button class="modal-close" onclick="closeSquareConfigModal()">&times;</button>
+            </div>
+            <form id="squareConfigForm" onsubmit="saveSquareConfig(event)">
+                <div class="modal-body">
+                    <p class="modal-description">
+                        Configure your Square API credentials to sync your product catalog to the mobile app.
+                        Get your access token from the <a href="https://developer.squareup.com" target="_blank" style="color: var(--neon-blue);">Square Developer Dashboard</a>.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Access Token</label>
+                        <input type="password" id="squareAccessToken" class="form-input" placeholder="Enter Square access token">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Location ID</label>
+                        <input type="text" id="squareLocationId" class="form-input" placeholder="Enter location ID (optional)">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Environment</label>
+                        <select id="squareEnvironment" class="form-input">
+                            <option value="production">Production</option>
+                            <option value="sandbox">Sandbox</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeSquareConfigModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+                </div>
+            </form>
         </div>
     </div>
 
