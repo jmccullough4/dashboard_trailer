@@ -2407,6 +2407,38 @@ async function loadAppControlStats() {
         const el = document.getElementById('deviceCount');
         if (el) el.textContent = Array.isArray(devices) ? devices.length : '0';
     } catch (e) {}
+
+    // Load APNs status
+    try {
+        const resp = await fetch('/api/apns/status');
+        const data = await resp.json();
+        const el = document.getElementById('apnsStatus');
+        if (el) {
+            if (!data.available) {
+                el.textContent = 'Not Installed';
+            } else if (!data.key_configured) {
+                el.textContent = 'Key Missing';
+            } else {
+                el.textContent = `Ready (${data.active_devices} devices)`;
+                el.className = 'cc-stat-value connected';
+            }
+        }
+    } catch (e) {}
+}
+
+async function testPushNotification() {
+    if (!confirm('Send a test push notification to all registered devices?')) return;
+    try {
+        const resp = await fetch('/api/apns/test', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            showToast(`Test push sent to ${data.sent} device(s)`);
+        } else {
+            showToast(data.error || 'Failed to send', 'error');
+        }
+    } catch (e) {
+        showToast('Error sending test push', 'error');
+    }
 }
 
 function showSquareConfigModal() {

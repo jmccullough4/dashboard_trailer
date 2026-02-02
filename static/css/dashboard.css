@@ -3135,7 +3135,7 @@ select.form-input {
 
 .cc-stats-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     margin-top: 20px;
 }
