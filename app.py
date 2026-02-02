@@ -2088,7 +2088,10 @@ def send_push_notification(title, body, badge=1):
             'iss': team_id,
             'iat': int(time.time()),
         }
-        token = pyjwt.encode(token_payload, auth_key, algorithm='ES256', headers={'kid': key_id})
+        token = pyjwt.encode(token_payload, auth_key, algorithm='ES256', headers={'alg': 'ES256', 'kid': key_id})
+        # PyJWT 1.x returns bytes, 2.x returns str
+        if isinstance(token, bytes):
+            token = token.decode('utf-8')
 
         apns_host = 'https://api.sandbox.push.apple.com' if use_sandbox else 'https://api.push.apple.com'
 
