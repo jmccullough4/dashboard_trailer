@@ -328,9 +328,10 @@ class DeviceToken(db.Model):
     """Push notification device tokens"""
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(500), unique=True, nullable=False)
-    device_id = db.Column(db.String(100))  # Persistent UUID per device
-    device_name = db.Column(db.String(200))  # e.g. "John's iPhone 15"
+    device_id = db.Column(db.String(100))
+    device_name = db.Column(db.String(200))
     platform = db.Column(db.String(20), default='ios')
+    apns_environment = db.Column(db.String(20), default='production')
     is_active = db.Column(db.Boolean, default=True)
     registered_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -2083,7 +2084,12 @@ def apply_update():
 # =============================================================================
 
 def send_push_notification(title, body, badge=1):
-    """Send push notification to all registered iOS devices via APNs HTTP/2"""
+    """Send push notification to all registered iOS devices via APNs HTTP/2.
+
+    Routes each device to the correct APNs endpoint (production or sandbox)
+    based on the environment the device registered with. Falls back to trying
+    the other endpoint if the primary one rejects the token.
+    """
     if not APNS_AVAILABLE:
         print("APNs not available - httpx/jwt packages not installed")
         return {'sent': 0, 'error': 'httpx or PyJWT not installed'}
@@ -2092,7 +2098,6 @@ def send_push_notification(title, body, badge=1):
     key_id = os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9')
     team_id = os.environ.get('APNS_TEAM_ID', 'GM432NV6J6')
     bundle_id = os.environ.get('APNS_BUNDLE_ID', 'com.threestrandscattle.app')
-    use_sandbox = os.environ.get('APNS_SANDBOX', 'false').lower() == 'true'
 
     if not os.path.exists(key_path):
         print(f"APNs key file not found: {key_path}")
@@ -2108,15 +2113,16 @@ def send_push_notification(title, body, badge=1):
             'iat': int(time.time()),
         }
         token = pyjwt.encode(token_payload, auth_key, algorithm='ES256', headers={'kid': key_id})
-        # PyJWT 1.x returns bytes, 2.x returns str
         if isinstance(token, bytes):
             token = token.decode('utf-8')
 
-        apns_host = 'https://api.sandbox.push.apple.com' if use_sandbox else 'https://api.push.apple.com'
+        PROD_HOST = 'https://api.push.apple.com'
+        SANDBOX_HOST = 'https://api.sandbox.push.apple.com'
 
         # Get all active device tokens (filter to valid APNs hex tokens only)
         all_tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
-        tokens = [d for d in all_tokens if d.token and len(d.token) >= 64 and all(c in '0123456789abcdef' for c in d.token.lower())]
+        tokens = [d for d in all_tokens if d.token and len(d.token) >= 64
+                  and all(c in '0123456789abcdef' for c in d.token.lower())]
         if not tokens:
             msg = f"No valid APNs tokens ({len(all_tokens)} total devices)"
             print(msg)
@@ -2127,7 +2133,6 @@ def send_push_notification(title, body, badge=1):
                 'alert': {'title': title, 'body': body},
                 'sound': 'default',
                 'badge': badge,
-                'content-available': 1
             }
         }
 
@@ -2136,30 +2141,59 @@ def send_push_notification(title, body, badge=1):
         with httpx.Client(http1=False, http2=True) as client:
             for device in tokens:
                 try:
-                    url = f"{apns_host}/3/device/{device.token}"
                     headers = {
                         'authorization': f'bearer {token}',
                         'apns-topic': bundle_id,
                         'apns-push-type': 'alert',
                         'apns-priority': '10',
                     }
+
+                    # Pick the right APNs host based on what the device told us
+                    env = getattr(device, 'apns_environment', None) or 'production'
+                    primary_host = SANDBOX_HOST if env == 'sandbox' else PROD_HOST
+                    fallback_host = PROD_HOST if env == 'sandbox' else SANDBOX_HOST
+
+                    # Try the primary endpoint
+                    url = f"{primary_host}/3/device/{device.token}"
                     resp = client.post(url, json=notification, headers=headers)
-                    print(f"APNs response: {resp.status_code} http/{resp.http_version} for {device.token[:12]}...")
+                    print(f"APNs [{env}] {resp.status_code} for {device.token[:12]}...")
+
                     if resp.status_code == 200:
                         sent += 1
-                    else:
-                        err_body = resp.text
-                        print(f"APNs {resp.status_code} for {device.token[:12]}...: {err_body}")
-                        errors.append(f"{resp.status_code}: {err_body}")
-                        if resp.status_code in (400, 410):
-                            device.is_active = False
+                        continue
+
+                    # If BadDeviceToken, try the other endpoint (environment mismatch)
+                    primary_err = resp.text
+                    if resp.status_code == 400 and 'BadDeviceToken' in primary_err:
+                        print(f"  BadDeviceToken on {env}, trying fallback...")
+                        url = f"{fallback_host}/3/device/{device.token}"
+                        resp = client.post(url, json=notification, headers=headers)
+                        print(f"  Fallback: {resp.status_code}")
+
+                        if resp.status_code == 200:
+                            sent += 1
+                            # Update stored environment so future sends go direct
+                            new_env = 'sandbox' if fallback_host == SANDBOX_HOST else 'production'
+                            try:
+                                device.apns_environment = new_env
+                            except Exception:
+                                pass
+                            continue
+
+                    # Both endpoints failed
+                    err_body = resp.text
+                    print(f"APNs FAILED for {device.token[:12]}...: {resp.status_code} {err_body}")
+                    errors.append(f"{device.token[:12]}: {resp.status_code} {err_body}")
+                    if resp.status_code in (400, 410):
+                        device.is_active = False
+
                 except Exception as e:
                     print(f"Failed to send to {device.token[:12]}...: {e}")
                     errors.append(str(e))
 
         db.session.commit()
         print(f"Push notifications sent: {sent}/{len(tokens)}")
-        result = {'sent': sent, 'total_devices': len(all_tokens), 'valid_tokens': len(tokens), 'sandbox': use_sandbox}
+        result = {'sent': sent, 'total_devices': len(all_tokens), 'valid_tokens': len(tokens)}
         if errors:
             result['errors'] = errors
         return result
@@ -2310,6 +2344,7 @@ def public_register_device():
     platform = data.get('platform', 'ios')
     device_id = data.get('device_id', '')
     device_name = data.get('device_name', '')
+    environment = data.get('environment', 'production')
 
     try:
         # If device_id provided, find by device_id first (handles token changes)
@@ -2327,6 +2362,7 @@ def public_register_device():
                 existing.token = token
                 existing.last_seen = datetime.utcnow()
                 existing.is_active = True
+                existing.apns_environment = environment
                 if device_name:
                     existing.device_name = device_name
                 db.session.commit()
@@ -2337,6 +2373,7 @@ def public_register_device():
         if existing:
             existing.last_seen = datetime.utcnow()
             existing.is_active = True
+            existing.apns_environment = environment
             if device_id and not existing.device_id:
                 existing.device_id = device_id
             if device_name:
@@ -2344,7 +2381,8 @@ def public_register_device():
             db.session.commit()
             return jsonify({'success': True, 'status': 'updated'})
 
-        device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name)
+        device = DeviceToken(token=token, platform=platform, device_id=device_id,
+                             device_name=device_name, apns_environment=environment)
         db.session.add(device)
         db.session.commit()
         return jsonify({'success': True, 'status': 'registered'})
