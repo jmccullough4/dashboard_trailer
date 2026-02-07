@@ -328,10 +328,9 @@ class DeviceToken(db.Model):
     """Push notification device tokens"""
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(500), unique=True, nullable=False)
-    device_id = db.Column(db.String(100))
-    device_name = db.Column(db.String(200))
+    device_id = db.Column(db.String(100))  # Persistent UUID per device
+    device_name = db.Column(db.String(200))  # e.g. "John's iPhone 15"
     platform = db.Column(db.String(20), default='ios')
-    apns_environment = db.Column(db.String(20), default='production')
     is_active = db.Column(db.Boolean, default=True)
     registered_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -2086,9 +2085,10 @@ def apply_update():
 def send_push_notification(title, body, badge=1):
     """Send push notification to all registered iOS devices via APNs HTTP/2.
 
-    Routes each device to the correct APNs endpoint (production or sandbox)
-    based on the environment the device registered with. Falls back to trying
-    the other endpoint if the primary one rejects the token.
+    Tries production endpoint first, falls back to sandbox if the token is
+    rejected — this handles debug (Xcode) vs release (TestFlight/App Store)
+    builds automatically without needing to track which environment each
+    device registered from.
     """
     if not APNS_AVAILABLE:
         print("APNs not available - httpx/jwt packages not installed")
@@ -2148,39 +2148,28 @@ def send_push_notification(title, body, badge=1):
                         'apns-priority': '10',
                     }
 
-                    # Pick the right APNs host based on what the device told us
-                    env = getattr(device, 'apns_environment', None) or 'production'
-                    primary_host = SANDBOX_HOST if env == 'sandbox' else PROD_HOST
-                    fallback_host = PROD_HOST if env == 'sandbox' else SANDBOX_HOST
-
-                    # Try the primary endpoint
-                    url = f"{primary_host}/3/device/{device.token}"
+                    # Try production first
+                    url = f"{PROD_HOST}/3/device/{device.token}"
                     resp = client.post(url, json=notification, headers=headers)
-                    print(f"APNs [{env}] {resp.status_code} for {device.token[:12]}...")
+                    print(f"APNs [prod] {resp.status_code} for {device.token[:12]}...")
 
                     if resp.status_code == 200:
                         sent += 1
                         continue
 
-                    # If BadDeviceToken, try the other endpoint (environment mismatch)
+                    # If BadDeviceToken on production, try sandbox (debug builds)
                     primary_err = resp.text
                     if resp.status_code == 400 and 'BadDeviceToken' in primary_err:
-                        print(f"  BadDeviceToken on {env}, trying fallback...")
-                        url = f"{fallback_host}/3/device/{device.token}"
+                        print(f"  BadDeviceToken on prod, trying sandbox...")
+                        url = f"{SANDBOX_HOST}/3/device/{device.token}"
                         resp = client.post(url, json=notification, headers=headers)
-                        print(f"  Fallback: {resp.status_code}")
+                        print(f"  Sandbox: {resp.status_code}")
 
                         if resp.status_code == 200:
                             sent += 1
-                            # Update stored environment so future sends go direct
-                            new_env = 'sandbox' if fallback_host == SANDBOX_HOST else 'production'
-                            try:
-                                device.apns_environment = new_env
-                            except Exception:
-                                pass
                             continue
 
-                    # Both endpoints failed
+                    # Both failed
                     err_body = resp.text
                     print(f"APNs FAILED for {device.token[:12]}...: {resp.status_code} {err_body}")
                     errors.append(f"{device.token[:12]}: {resp.status_code} {err_body}")
@@ -2344,7 +2333,6 @@ def public_register_device():
     platform = data.get('platform', 'ios')
     device_id = data.get('device_id', '')
     device_name = data.get('device_name', '')
-    environment = data.get('environment', 'production')
 
     try:
         # If device_id provided, find by device_id first (handles token changes)
@@ -2362,7 +2350,6 @@ def public_register_device():
                 existing.token = token
                 existing.last_seen = datetime.utcnow()
                 existing.is_active = True
-                existing.apns_environment = environment
                 if device_name:
                     existing.device_name = device_name
                 db.session.commit()
@@ -2373,7 +2360,6 @@ def public_register_device():
         if existing:
             existing.last_seen = datetime.utcnow()
             existing.is_active = True
-            existing.apns_environment = environment
             if device_id and not existing.device_id:
                 existing.device_id = device_id
             if device_name:
@@ -2381,8 +2367,7 @@ def public_register_device():
             db.session.commit()
             return jsonify({'success': True, 'status': 'updated'})
 
-        device = DeviceToken(token=token, platform=platform, device_id=device_id,
-                             device_name=device_name, apns_environment=environment)
+        device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name)
         db.session.add(device)
         db.session.commit()
         return jsonify({'success': True, 'status': 'registered'})
@@ -2859,8 +2844,7 @@ def migrate_db():
 
             columns_to_add = {
                 'device_id': 'VARCHAR(100)',
-                'device_name': 'VARCHAR(200)',
-                'apns_environment': "VARCHAR(20) DEFAULT 'production'"
+                'device_name': 'VARCHAR(200)'
             }
 
             for col_name, col_type in columns_to_add.items():
