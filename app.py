@@ -2859,7 +2859,8 @@ def migrate_db():
 
             columns_to_add = {
                 'device_id': 'VARCHAR(100)',
-                'device_name': 'VARCHAR(200)'
+                'device_name': 'VARCHAR(200)',
+                'apns_environment': "VARCHAR(20) DEFAULT 'production'"
             }
 
             for col_name, col_type in columns_to_add.items():
