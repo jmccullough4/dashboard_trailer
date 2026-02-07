@@ -2133,6 +2133,8 @@ def send_push_notification(title, body, badge=1):
                 'alert': {'title': title, 'body': body},
                 'sound': 'default',
                 'badge': badge,
+                'content-available': 1,  # Enable background delivery
+                'mutable-content': 1,  # Allow notification service extension processing
             }
         }
 
