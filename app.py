@@ -2431,15 +2431,17 @@ def create_flash_sale():
     db.session.commit()
 
     # Send push notification for active sales
+    push_result = None
     if sale.is_active:
         discount = int(((sale.original_price - sale.sale_price) / sale.original_price) * 100) if sale.original_price > 0 else 0
         action = "New" if not sale_id else "Updated"
-        send_push_notification(
+        push_result = send_push_notification(
             f"3 Strands Flash Sale!",
             f"{action}: {sale.title} — {discount}% off! ${sale.sale_price:.2f}/lb"
         )
+        print(f"Flash sale push result: {push_result}")
 
-    return jsonify({'success': True, 'sale': sale.to_dict()})
+    return jsonify({'success': True, 'sale': sale.to_dict(), 'push_result': push_result})
 
 
 @app.route('/api/flash-sales/<int:sale_id>', methods=['DELETE'])
@@ -2509,15 +2511,17 @@ def create_popup_location():
     db.session.commit()
 
     # Send push notification for active locations
+    push_result = None
     if loc.is_active:
         date_str = loc.date.strftime('%b %d') if loc.date else ''
         action = "New" if not loc_id else "Updated"
-        send_push_notification(
+        push_result = send_push_notification(
             f"3 Strands is Coming to You!",
             f"{action}: {loc.title} — {date_str} at {loc.location}"
         )
+        print(f"Pop-up push result: {push_result}")
 
-    return jsonify({'success': True, 'location': loc.to_dict()})
+    return jsonify({'success': True, 'location': loc.to_dict(), 'push_result': push_result})
 
 
 @app.route('/api/popup-locations/<int:loc_id>', methods=['DELETE'])
@@ -2571,9 +2575,10 @@ def create_announcement():
     db.session.commit()
 
     # Send push notification to all devices
-    send_push_notification(title, message)
+    push_result = send_push_notification(title, message)
+    print(f"Announcement push result: {push_result}")
 
-    return jsonify({'success': True, 'announcement': announcement.to_dict()})
+    return jsonify({'success': True, 'announcement': announcement.to_dict(), 'push_result': push_result})
 
 
 @app.route('/api/announcements/<int:ann_id>', methods=['PATCH'])
