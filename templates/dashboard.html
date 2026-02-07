@@ -314,6 +314,34 @@
                     </div>
                 </div>
 
+                <!-- Announcements Management -->
+                <div class="cc-panel">
+                    <div class="cc-panel-header">
+                        <h4><i class="fas fa-bullhorn"></i> Announcements</h4>
+                        <button class="btn btn-primary btn-sm" onclick="showAnnouncementModal()">
+                            <i class="fas fa-plus"></i> Send Announcement
+                        </button>
+                    </div>
+                    <div class="cc-table-container">
+                        <table class="admin-table" id="announcementsTable">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Message</th>
+                                    <th>Sent</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="announcementsTableBody"></tbody>
+                        </table>
+                        <div class="cc-empty" id="announcementsEmpty" style="display: none;">
+                            <i class="fas fa-bullhorn"></i>
+                            <p>No announcements yet. Send one to push to the app.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Square & Device Stats -->
                 <div class="cc-stats-row">
                     <div class="cc-stat-card">
@@ -942,6 +970,32 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closePopUpModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Location</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Announcement Modal -->
+    <div class="modal" id="announcementModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-bullhorn"></i> Send Announcement</h3>
+                <button class="modal-close" onclick="closeAnnouncementModal()">&times;</button>
+            </div>
+            <form id="announcementForm" onsubmit="sendAnnouncement(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input type="text" id="announcementTitle" class="form-input" placeholder="Announcement title" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Message</label>
+                        <textarea id="announcementMessage" class="form-input" rows="4" placeholder="Announcement message..." required></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAnnouncementModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send to All Users</button>
                 </div>
             </form>
         </div>

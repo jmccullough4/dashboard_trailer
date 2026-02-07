@@ -129,6 +129,7 @@ function initNavigation() {
             if (section === 'appcontrol') {
                 loadFlashSales();
                 loadPopUpLocations();
+                loadAnnouncements();
                 loadAppControlStats();
             }
 
@@ -2542,6 +2543,143 @@ async function saveSquareConfig(event) {
         }
     } catch (error) {
         showToast('Error saving configuration', 'error');
+    }
+}
+
+// =============================================================================
+// App Command & Control - Announcements
+// =============================================================================
+
+async function loadAnnouncements() {
+    try {
+        const response = await fetch('/api/announcements');
+        const announcements = await response.json();
+        renderAnnouncementsTable(announcements);
+    } catch (error) {
+        console.error('Error loading announcements:', error);
+    }
+}
+
+function renderAnnouncementsTable(announcements) {
+    const tbody = document.getElementById('announcementsTableBody');
+    const empty = document.getElementById('announcementsEmpty');
+    if (!tbody) return;
+
+    if (announcements.length === 0) {
+        tbody.innerHTML = '';
+        if (empty) empty.style.display = 'flex';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = announcements.map(ann => {
+        const created = new Date(ann.created_at);
+        const statusClass = ann.is_active ? 'active' : 'inactive';
+        const statusText = ann.is_active ? 'Active' : 'Inactive';
+        const toggleBtn = ann.is_active
+            ? `<button class="btn btn-sm btn-icon" onclick="deactivateAnnouncement(${ann.id})" title="Deactivate"><i class="fas fa-eye-slash"></i></button>`
+            : `<button class="btn btn-sm btn-icon" onclick="activateAnnouncement(${ann.id})" title="Activate"><i class="fas fa-eye"></i></button>`;
+
+        return `<tr>
+            <td><strong>${escapeHtml(ann.title)}</strong></td>
+            <td>${escapeHtml(ann.message).substring(0, 80)}${ann.message.length > 80 ? '...' : ''}</td>
+            <td>${created.toLocaleDateString()} ${created.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
+            <td>
+                ${toggleBtn}
+                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deleteAnnouncement(${ann.id})" title="Delete"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showAnnouncementModal() {
+    document.getElementById('announcementTitle').value = '';
+    document.getElementById('announcementMessage').value = '';
+    document.getElementById('announcementModal').classList.add('show');
+}
+
+function closeAnnouncementModal() {
+    document.getElementById('announcementModal').classList.remove('show');
+}
+
+async function sendAnnouncement(event) {
+    event.preventDefault();
+    const title = document.getElementById('announcementTitle').value.trim();
+    const message = document.getElementById('announcementMessage').value.trim();
+
+    if (!confirm(`Send this announcement to all users?\n\n"${title}"\n${message}`)) return;
+
+    try {
+        const response = await fetch('/api/announcements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, message })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast('Announcement sent to all users');
+            closeAnnouncementModal();
+            loadAnnouncements();
+        } else {
+            showToast(result.error || 'Failed to send', 'error');
+        }
+    } catch (error) {
+        showToast('Error sending announcement', 'error');
+    }
+}
+
+async function deactivateAnnouncement(annId) {
+    try {
+        const response = await fetch(`/api/announcements/${annId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: false })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Announcement deactivated');
+            loadAnnouncements();
+        } else {
+            showToast(data.error || 'Failed to update', 'error');
+        }
+    } catch (error) {
+        showToast('Error updating announcement', 'error');
+    }
+}
+
+async function activateAnnouncement(annId) {
+    try {
+        const response = await fetch(`/api/announcements/${annId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: true })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Announcement activated');
+            loadAnnouncements();
+        } else {
+            showToast(data.error || 'Failed to update', 'error');
+        }
+    } catch (error) {
+        showToast('Error updating announcement', 'error');
+    }
+}
+
+async function deleteAnnouncement(annId) {
+    if (!confirm('Delete this announcement?')) return;
+    try {
+        const response = await fetch(`/api/announcements/${annId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Announcement deleted');
+            loadAnnouncements();
+        } else {
+            showToast(data.error || 'Failed to delete', 'error');
+        }
+    } catch (error) {
+        showToast('Error deleting announcement', 'error');
     }
 }
 
