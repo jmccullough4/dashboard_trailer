@@ -2092,7 +2092,7 @@ def send_push_notification(title, body, badge=1):
     key_id = os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9')
     team_id = os.environ.get('APNS_TEAM_ID', 'GM432NV6J6')
     bundle_id = os.environ.get('APNS_BUNDLE_ID', 'com.threestrandscattle.app')
-    use_sandbox = os.environ.get('APNS_SANDBOX', 'true').lower() == 'true'
+    use_sandbox = os.environ.get('APNS_SANDBOX', 'false').lower() == 'true'
 
     if not os.path.exists(key_path):
         print(f"APNs key file not found: {key_path}")
