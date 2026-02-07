@@ -2095,8 +2095,8 @@ def send_push_notification(title, body, badge=1):
         print("APNs not available - httpx/jwt packages not installed")
         return {'sent': 0, 'error': 'httpx or PyJWT not installed'}
 
-    key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_A9VMASUDQ9.p8')
-    key_id = os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9')
+    key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_32CB49UN77.p8')
+    key_id = os.environ.get('APNS_KEY_ID', '32CB49UN77')
     team_id = os.environ.get('APNS_TEAM_ID', 'GM432NV6J6')
     bundle_id = os.environ.get('APNS_BUNDLE_ID', 'com.threestrandscattle.app')
 
@@ -2121,8 +2121,9 @@ def send_push_notification(title, body, badge=1):
         SANDBOX_HOST = 'https://api.sandbox.push.apple.com'
 
         # Get all active device tokens (filter to valid APNs hex tokens only)
+        # Valid APNs tokens are exactly 64 hex characters (32 bytes)
         all_tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
-        tokens = [d for d in all_tokens if d.token and len(d.token) >= 64
+        tokens = [d for d in all_tokens if d.token and len(d.token) == 64
                   and all(c in '0123456789abcdef' for c in d.token.lower())]
         if not tokens:
             msg = f"No valid APNs tokens ({len(all_tokens)} total devices)"
@@ -2739,14 +2740,14 @@ def get_apns_status():
     if not current_user.is_admin:
         return jsonify({'error': 'Admin required'}), 403
 
-    key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_A9VMASUDQ9.p8')
+    key_path = os.environ.get('APNS_KEY_PATH', './AuthKey_32CB49UN77.p8')
     key_exists = os.path.exists(key_path)
     device_count = DeviceToken.query.filter_by(is_active=True, platform='ios').count()
 
     return jsonify({
         'available': APNS_AVAILABLE,
         'key_configured': key_exists,
-        'key_id': os.environ.get('APNS_KEY_ID', 'A9VMASUDQ9'),
+        'key_id': os.environ.get('APNS_KEY_ID', '32CB49UN77'),
         'team_id': os.environ.get('APNS_TEAM_ID', 'GM432NV6J6'),
         'active_devices': device_count
     })
