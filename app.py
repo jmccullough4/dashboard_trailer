@@ -2374,8 +2374,10 @@ def public_register_device():
 
     except Exception as e:
         db.session.rollback()
+        import traceback
+        traceback.print_exc()
         print(f"Device registration error: {e}")
-        return jsonify({'error': 'Registration failed'}), 500
+        return jsonify({'error': f'Registration failed: {e}'}), 500
 
 
 # =============================================================================
