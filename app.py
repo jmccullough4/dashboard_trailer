@@ -336,6 +336,25 @@ class DeviceToken(db.Model):
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class Announcement(db.Model):
+    """Custom announcements pushed to the mobile app"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'message': self.message,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 # =============================================================================
 # User Loader
 # =============================================================================
@@ -2252,6 +2271,34 @@ def public_events():
     return jsonify([e.to_dict() for e in events])
 
 
+@app.route('/api/public/pop-up-sales', methods=['GET'])
+def public_pop_up_sales():
+    """Return upcoming pop-up sales for the mobile app (iOS field mapping)"""
+    events = PopUpLocation.query.filter_by(is_active=True).filter(
+        PopUpLocation.date >= datetime.utcnow()
+    ).order_by(PopUpLocation.date.asc()).all()
+    return jsonify([{
+        'id': e.id,
+        'title': e.title,
+        'description': None,
+        'address': e.location,
+        'latitude': e.latitude or 0.0,
+        'longitude': e.longitude or 0.0,
+        'starts_at': e.date.isoformat() if e.date else None,
+        'ends_at': e.end_date.isoformat() if e.end_date else None,
+        'is_active': e.is_active,
+    } for e in events])
+
+
+@app.route('/api/public/announcements', methods=['GET'])
+def public_announcements():
+    """Return active announcements for the mobile app"""
+    announcements = Announcement.query.filter_by(is_active=True).order_by(
+        Announcement.created_at.desc()
+    ).all()
+    return jsonify([a.to_dict() for a in announcements])
+
+
 @app.route('/api/public/register-device', methods=['POST'])
 def public_register_device():
     """Register a device for push notifications"""
@@ -2460,6 +2507,81 @@ def delete_popup_location(loc_id):
         return jsonify({'error': 'Location not found'}), 404
 
     db.session.delete(loc)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# =============================================================================
+# Admin: Announcements Management
+# =============================================================================
+
+@app.route('/api/announcements', methods=['GET'])
+@login_required
+def get_announcements():
+    """Get all announcements (admin view - includes inactive)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+    return jsonify([a.to_dict() for a in announcements])
+
+
+@app.route('/api/announcements', methods=['POST'])
+@login_required
+def create_announcement():
+    """Create a new announcement and send push notification"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    title = data.get('title', '').strip()
+    message = data.get('message', '').strip()
+    if not title or not message:
+        return jsonify({'error': 'Title and message are required'}), 400
+
+    announcement = Announcement(title=title, message=message, is_active=True)
+    db.session.add(announcement)
+    db.session.commit()
+
+    # Send push notification to all devices
+    send_push_notification(title, message)
+
+    return jsonify({'success': True, 'announcement': announcement.to_dict()})
+
+
+@app.route('/api/announcements/<int:ann_id>', methods=['PATCH'])
+@login_required
+def toggle_announcement(ann_id):
+    """Toggle announcement active status"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    announcement = Announcement.query.get(ann_id)
+    if not announcement:
+        return jsonify({'error': 'Announcement not found'}), 404
+
+    data = request.get_json()
+    if data and 'is_active' in data:
+        announcement.is_active = data['is_active']
+
+    db.session.commit()
+    return jsonify({'success': True, 'announcement': announcement.to_dict()})
+
+
+@app.route('/api/announcements/<int:ann_id>', methods=['DELETE'])
+@login_required
+def delete_announcement(ann_id):
+    """Delete an announcement"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    announcement = Announcement.query.get(ann_id)
+    if not announcement:
+        return jsonify({'error': 'Announcement not found'}), 404
+
+    db.session.delete(announcement)
     db.session.commit()
     return jsonify({'success': True})
 
