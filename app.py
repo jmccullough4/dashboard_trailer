@@ -331,6 +331,7 @@ class DeviceToken(db.Model):
     device_id = db.Column(db.String(100))  # Persistent UUID per device
     device_name = db.Column(db.String(200))  # e.g. "John's iPhone 15"
     platform = db.Column(db.String(20), default='ios')
+    apns_environment = db.Column(db.String(20), default='production')  # 'sandbox' or 'production'
     is_active = db.Column(db.Boolean, default=True)
     registered_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -2148,31 +2149,39 @@ def send_push_notification(title, body, badge=1):
                         'apns-topic': bundle_id,
                         'apns-push-type': 'alert',
                         'apns-priority': '10',
+                        'apns-expiration': '0',  # Immediate delivery, no retry
                     }
 
-                    # Try production first
-                    url = f"{PROD_HOST}/3/device/{device.token}"
+                    # Use the environment the device registered with
+                    env = getattr(device, 'apns_environment', 'production') or 'production'
+                    host = SANDBOX_HOST if env == 'sandbox' else PROD_HOST
+                    url = f"{host}/3/device/{device.token}"
+
+                    print(f"APNs [{env}] sending to {device.token[:12]}...")
                     resp = client.post(url, json=notification, headers=headers)
-                    print(f"APNs [prod] {resp.status_code} for {device.token[:12]}...")
+                    print(f"APNs [{env}] {resp.status_code} for {device.token[:12]}...")
 
                     if resp.status_code == 200:
                         sent += 1
                         continue
 
-                    # If BadDeviceToken on production, try sandbox (debug builds)
-                    primary_err = resp.text
-                    if resp.status_code == 400 and 'BadDeviceToken' in primary_err:
-                        print(f"  BadDeviceToken on prod, trying sandbox...")
-                        url = f"{SANDBOX_HOST}/3/device/{device.token}"
+                    # If wrong environment, try the other one
+                    err_body = resp.text
+                    if resp.status_code == 400 and 'BadDeviceToken' in err_body:
+                        alt_env = 'sandbox' if env == 'production' else 'production'
+                        alt_host = SANDBOX_HOST if alt_env == 'sandbox' else PROD_HOST
+                        print(f"  BadDeviceToken, trying {alt_env}...")
+                        url = f"{alt_host}/3/device/{device.token}"
                         resp = client.post(url, json=notification, headers=headers)
-                        print(f"  Sandbox: {resp.status_code}")
+                        print(f"  {alt_env}: {resp.status_code}")
 
                         if resp.status_code == 200:
+                            # Update device's environment for future pushes
+                            device.apns_environment = alt_env
                             sent += 1
                             continue
+                        err_body = resp.text
 
-                    # Both failed
-                    err_body = resp.text
                     print(f"APNs FAILED for {device.token[:12]}...: {resp.status_code} {err_body}")
                     errors.append(f"{device.token[:12]}: {resp.status_code} {err_body}")
                     if resp.status_code in (400, 410):
@@ -2335,6 +2344,8 @@ def public_register_device():
     platform = data.get('platform', 'ios')
     device_id = data.get('device_id', '')
     device_name = data.get('device_name', '')
+    # iOS app should send 'sandbox' for debug builds, 'production' for release/TestFlight
+    apns_environment = data.get('apns_environment', 'production')
 
     try:
         # If device_id provided, find by device_id first (handles token changes)
@@ -2352,6 +2363,7 @@ def public_register_device():
                 existing.token = token
                 existing.last_seen = datetime.utcnow()
                 existing.is_active = True
+                existing.apns_environment = apns_environment
                 if device_name:
                     existing.device_name = device_name
                 db.session.commit()
@@ -2362,6 +2374,7 @@ def public_register_device():
         if existing:
             existing.last_seen = datetime.utcnow()
             existing.is_active = True
+            existing.apns_environment = apns_environment
             if device_id and not existing.device_id:
                 existing.device_id = device_id
             if device_name:
@@ -2369,7 +2382,7 @@ def public_register_device():
             db.session.commit()
             return jsonify({'success': True, 'status': 'updated'})
 
-        device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name)
+        device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name, apns_environment=apns_environment)
         db.session.add(device)
         db.session.commit()
         return jsonify({'success': True, 'status': 'registered'})
@@ -2853,7 +2866,8 @@ def migrate_db():
 
             columns_to_add = {
                 'device_id': 'VARCHAR(100)',
-                'device_name': 'VARCHAR(200)'
+                'device_name': 'VARCHAR(200)',
+                'apns_environment': 'VARCHAR(20)'
             }
 
             for col_name, col_type in columns_to_add.items():
