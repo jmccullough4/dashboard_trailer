@@ -2123,8 +2123,17 @@ def send_push_notification(title, body, badge=1):
         # Get all active device tokens (filter to valid APNs hex tokens only)
         # Valid APNs tokens are exactly 64 hex characters (32 bytes)
         all_tokens = DeviceToken.query.filter_by(is_active=True, platform='ios').all()
-        tokens = [d for d in all_tokens if d.token and len(d.token) == 64
-                  and all(c in '0123456789abcdef' for c in d.token.lower())]
+        valid = [d for d in all_tokens if d.token and len(d.token) == 64
+                 and all(c in '0123456789abcdef' for c in d.token.lower())]
+
+        # Deduplicate: keep only one record per device_id (most recently seen)
+        seen_devices = {}
+        tokens = []
+        for d in valid:
+            key = d.device_id or d.token  # fall back to token if no device_id
+            if key not in seen_devices or (d.last_seen and d.last_seen > seen_devices[key].last_seen):
+                seen_devices[key] = d
+        tokens = list(seen_devices.values())
         if not tokens:
             msg = f"No valid APNs tokens ({len(all_tokens)} total devices)"
             print(msg)
@@ -2360,6 +2369,14 @@ def public_register_device():
                 ).first()
                 if conflict:
                     db.session.delete(conflict)
+
+                # Clean up any other duplicate records for this device_id
+                dupes = DeviceToken.query.filter(
+                    DeviceToken.device_id == device_id,
+                    DeviceToken.id != existing.id
+                ).all()
+                for dupe in dupes:
+                    db.session.delete(dupe)
 
                 existing.token = token
                 existing.last_seen = datetime.utcnow()
