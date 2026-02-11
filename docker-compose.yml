@@ -14,6 +14,7 @@ services:
     environment:
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - FLASK_ENV=production
+      - FCM_KEY_PATH=/app/strands-cattle-co-e0c05-firebase-adminsdk-fbsvc-91cc983b97.json
     restart: unless-stopped
 
 volumes:
