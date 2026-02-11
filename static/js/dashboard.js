@@ -107,7 +107,7 @@ function initNavigation() {
         'sensors': 'Sensor Dashboard',
         'tasks': 'Task Board',
         'files': 'File Manager',
-        'appcontrol': 'App Command & Control',
+        'appcontrol': 'iOS App C²',
         'admin': 'User Management',
         'settings': 'System Settings'
     };
