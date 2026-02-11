@@ -35,7 +35,7 @@ The entire backend is contained in `app.py` (~2900 lines) organized into section
    - `YoLinkConfig`, `SensorReading` - YoLink sensor data
    - `EcoFlowConfig`, `EcoFlowReading` - EcoFlow battery monitoring
    - `SquareConfig` - Square POS integration
-   - `AppFlashSale`, `PopUpLocation`, `Announcement` - mobile app content
+   - `AppFlashSale`, `Event`, `Announcement` - mobile app content
    - `DeviceToken` - push notification tokens (iOS and Android)
 
 2. **API Integration Classes**:

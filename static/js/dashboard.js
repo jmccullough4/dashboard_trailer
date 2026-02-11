@@ -2751,15 +2751,15 @@ async function saveEvent(event) {
         location: document.getElementById('eventLocation').value,
         latitude: document.getElementById('eventLatitude').value || null,
         longitude: document.getElementById('eventLongitude').value || null,
-        start_date: document.getElementById('eventStartDate').value,
-        end_date: document.getElementById('eventEndDate').value || null,
+        start_date: localInputToUTC(document.getElementById('eventStartDate').value),
+        end_date: localInputToUTC(document.getElementById('eventEndDate').value),
         icon: document.getElementById('eventIcon').value,
         is_active: document.getElementById('eventActive').checked,
         is_popup: isPopup,
         notify: isPopup ? document.getElementById('eventNotify').checked : false,  // No notifications for calendar-only events
         is_recurring: isRecurring,
         recurrence_rule: isRecurring ? document.getElementById('eventRecurrenceRule').value : null,
-        recurrence_end_date: isRecurring ? (document.getElementById('eventRecurrenceEndDate').value || null) : null
+        recurrence_end_date: isRecurring ? localInputToUTC(document.getElementById('eventRecurrenceEndDate').value) : null
     };
     if (eventId) data.id = parseInt(eventId);
 
@@ -2803,4 +2803,14 @@ function toLocalISOString(date) {
     const offset = date.getTimezoneOffset();
     const local = new Date(date.getTime() - offset * 60 * 1000);
     return local.toISOString().slice(0, 16);
+}
+
+// Helper: convert local datetime-local input value to UTC ISO string
+function localInputToUTC(localDateTimeStr) {
+    if (!localDateTimeStr) return null;
+    // datetime-local gives us "YYYY-MM-DDTHH:MM" in local time
+    // Create a Date object (JS interprets this as local time)
+    const localDate = new Date(localDateTimeStr);
+    // Return as UTC ISO string
+    return localDate.toISOString();
 }
