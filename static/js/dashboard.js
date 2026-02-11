@@ -2721,8 +2721,15 @@ function renderEventsTable(events) {
         const startStr = `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
         const endStr = endDate ? `${endDate.toLocaleDateString()} ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : '--';
 
+        // Show recurrence indicator
+        let recurrenceLabel = '';
+        if (evt.is_recurring && evt.recurrence_rule) {
+            const ruleLabels = { 'weekly': 'Weekly', 'biweekly': 'Bi-weekly', 'monthly': 'Monthly' };
+            recurrenceLabel = `<span class="cc-badge recurrence" title="Recurring"><i class="fas fa-redo"></i> ${ruleLabels[evt.recurrence_rule] || evt.recurrence_rule}</span>`;
+        }
+
         return `<tr>
-            <td><strong>${escapeHtml(evt.title)}</strong></td>
+            <td><strong>${escapeHtml(evt.title)}</strong> ${recurrenceLabel}</td>
             <td>${escapeHtml(evt.location || '--')}</td>
             <td>${startStr}</td>
             <td>${endStr}</td>
@@ -2744,6 +2751,10 @@ function showEventModal(eventId = null) {
     document.getElementById('eventLongitude').value = '';
     document.getElementById('eventIcon').value = 'leaf.fill';
     document.getElementById('eventActive').checked = true;
+    document.getElementById('eventRecurring').checked = false;
+    document.getElementById('eventRecurrenceRule').value = 'weekly';
+    document.getElementById('eventRecurrenceEndDate').value = '';
+    toggleRecurrenceOptions();
     clearEventGeocodeStatus();
 
     // Default start date to now, end date to now + 4 hours
@@ -2754,6 +2765,12 @@ function showEventModal(eventId = null) {
 
     document.getElementById('eventModalTitle').innerHTML = '<i class="fas fa-calendar-alt"></i> New Event';
     document.getElementById('eventModal').classList.add('show');
+}
+
+function toggleRecurrenceOptions() {
+    const isRecurring = document.getElementById('eventRecurring').checked;
+    document.getElementById('recurrenceRuleGroup').style.display = isRecurring ? 'block' : 'none';
+    document.getElementById('recurrenceEndGroup').style.display = isRecurring ? 'block' : 'none';
 }
 
 function closeEventModal() {
@@ -2775,6 +2792,14 @@ async function editEvent(eventId) {
         document.getElementById('eventLongitude').value = evt.longitude || '';
         document.getElementById('eventIcon').value = evt.icon || 'leaf.fill';
         document.getElementById('eventActive').checked = evt.is_active;
+        document.getElementById('eventRecurring').checked = evt.is_recurring || false;
+        document.getElementById('eventRecurrenceRule').value = evt.recurrence_rule || 'weekly';
+        if (evt.recurrence_end_date) {
+            document.getElementById('eventRecurrenceEndDate').value = toLocalISOString(new Date(evt.recurrence_end_date));
+        } else {
+            document.getElementById('eventRecurrenceEndDate').value = '';
+        }
+        toggleRecurrenceOptions();
         clearEventGeocodeStatus();
 
         if (evt.start_date) document.getElementById('eventStartDate').value = toLocalISOString(new Date(evt.start_date));
@@ -2846,6 +2871,7 @@ function clearEventGeocodeStatus() {
 async function saveEvent(event) {
     event.preventDefault();
     const eventId = document.getElementById('eventId').value;
+    const isRecurring = document.getElementById('eventRecurring').checked;
     const data = {
         title: document.getElementById('eventTitle').value,
         description: document.getElementById('eventDescription').value,
@@ -2855,7 +2881,10 @@ async function saveEvent(event) {
         start_date: document.getElementById('eventStartDate').value,
         end_date: document.getElementById('eventEndDate').value || null,
         icon: document.getElementById('eventIcon').value,
-        is_active: document.getElementById('eventActive').checked
+        is_active: document.getElementById('eventActive').checked,
+        is_recurring: isRecurring,
+        recurrence_rule: isRecurring ? document.getElementById('eventRecurrenceRule').value : null,
+        recurrence_end_date: isRecurring ? (document.getElementById('eventRecurrenceEndDate').value || null) : null
     };
     if (eventId) data.id = parseInt(eventId);
 

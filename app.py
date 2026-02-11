@@ -367,6 +367,9 @@ class Event(db.Model):
     start_date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime)
     icon = db.Column(db.String(100), default='leaf.fill')
+    is_recurring = db.Column(db.Boolean, default=False)
+    recurrence_rule = db.Column(db.String(50))  # 'weekly', 'biweekly', 'monthly'
+    recurrence_end_date = db.Column(db.DateTime)  # When to stop generating instances
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -382,9 +385,78 @@ class Event(db.Model):
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'end_date': self.end_date.isoformat() if self.end_date else None,
             'icon': self.icon,
+            'is_recurring': self.is_recurring,
+            'recurrence_rule': self.recurrence_rule,
+            'recurrence_end_date': self.recurrence_end_date.isoformat() if self.recurrence_end_date else None,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+    def get_recurring_instances(self, from_date=None, to_date=None):
+        """Generate recurring event instances within a date range"""
+        if not self.is_recurring or not self.recurrence_rule:
+            return [self.to_dict()]
+
+        if from_date is None:
+            from_date = datetime.utcnow()
+        if to_date is None:
+            to_date = from_date + timedelta(days=90)  # Default 3 months ahead
+
+        instances = []
+        current_start = self.start_date
+        event_duration = (self.end_date - self.start_date) if self.end_date else timedelta(hours=4)
+
+        # Determine recurrence interval
+        if self.recurrence_rule == 'weekly':
+            delta = timedelta(weeks=1)
+        elif self.recurrence_rule == 'biweekly':
+            delta = timedelta(weeks=2)
+        elif self.recurrence_rule == 'monthly':
+            delta = None  # Handle monthly separately
+        else:
+            return [self.to_dict()]
+
+        # Generate instances
+        max_iterations = 100  # Safety limit
+        iteration = 0
+        while iteration < max_iterations:
+            iteration += 1
+
+            # Check if we've passed the recurrence end date
+            if self.recurrence_end_date and current_start > self.recurrence_end_date:
+                break
+
+            # Check if we've passed our search window
+            if current_start > to_date:
+                break
+
+            # Add instance if it's within our window
+            if current_start >= from_date:
+                instance = self.to_dict()
+                instance['start_date'] = current_start.isoformat()
+                instance['end_date'] = (current_start + event_duration).isoformat() if self.end_date else None
+                instance['instance_id'] = f"{self.id}_{current_start.strftime('%Y%m%d')}"
+                instances.append(instance)
+
+            # Calculate next occurrence
+            if self.recurrence_rule == 'monthly':
+                # Add one month
+                month = current_start.month + 1
+                year = current_start.year
+                if month > 12:
+                    month = 1
+                    year += 1
+                try:
+                    current_start = current_start.replace(year=year, month=month)
+                except ValueError:
+                    # Handle edge cases like Jan 31 -> Feb 28
+                    import calendar
+                    last_day = calendar.monthrange(year, month)[1]
+                    current_start = current_start.replace(year=year, month=month, day=min(current_start.day, last_day))
+            else:
+                current_start += delta
+
+        return instances
 
 
 # =============================================================================
@@ -2339,9 +2411,25 @@ def public_catalog():
 
 @app.route('/api/public/events', methods=['GET'])
 def public_events():
-    """Return active events for the mobile app"""
+    """Return active events for the mobile app, expanding recurring events"""
     events = Event.query.filter_by(is_active=True).order_by(Event.start_date.asc()).all()
-    return jsonify([e.to_dict() for e in events])
+
+    # Expand recurring events into instances
+    all_instances = []
+    now = datetime.utcnow()
+    future_limit = now + timedelta(days=90)  # Show events up to 3 months out
+
+    for event in events:
+        if event.is_recurring and event.recurrence_rule:
+            instances = event.get_recurring_instances(from_date=now, to_date=future_limit)
+            all_instances.extend(instances)
+        else:
+            all_instances.append(event.to_dict())
+
+    # Sort by start_date
+    all_instances.sort(key=lambda x: x['start_date'] if x['start_date'] else '')
+
+    return jsonify(all_instances)
 
 
 @app.route('/api/public/pop-up-sales', methods=['GET'])
@@ -2717,6 +2805,8 @@ def create_or_update_event():
     event.location = data.get('location', '')
     event.icon = data.get('icon', 'leaf.fill')
     event.is_active = data.get('is_active', True)
+    event.is_recurring = data.get('is_recurring', False)
+    event.recurrence_rule = data.get('recurrence_rule', '') if data.get('is_recurring') else None
 
     if data.get('latitude'):
         event.latitude = float(data['latitude'])
@@ -2727,6 +2817,10 @@ def create_or_update_event():
         event.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00').replace('+00:00', ''))
     if data.get('end_date'):
         event.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00').replace('+00:00', ''))
+    if data.get('recurrence_end_date'):
+        event.recurrence_end_date = datetime.fromisoformat(data['recurrence_end_date'].replace('Z', '+00:00').replace('+00:00', ''))
+    elif not data.get('is_recurring'):
+        event.recurrence_end_date = None
 
     db.session.commit()
 
@@ -3004,6 +3098,26 @@ def migrate_db():
                         db.session.execute(text(f'ALTER TABLE device_token ADD COLUMN {col_name} {col_type}'))
                         db.session.commit()
                         print(f"Added column '{col_name}' to device_token table")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"Could not add column '{col_name}': {e}")
+
+        # Migrate event table for recurrence fields
+        if 'event' in inspector.get_table_names():
+            existing_columns = [col['name'] for col in inspector.get_columns('event')]
+
+            columns_to_add = {
+                'is_recurring': 'BOOLEAN',
+                'recurrence_rule': 'VARCHAR(50)',
+                'recurrence_end_date': 'DATETIME'
+            }
+
+            for col_name, col_type in columns_to_add.items():
+                if col_name not in existing_columns:
+                    try:
+                        db.session.execute(text(f'ALTER TABLE event ADD COLUMN {col_name} {col_type}'))
+                        db.session.commit()
+                        print(f"Added column '{col_name}' to event table")
                     except Exception as e:
                         db.session.rollback()
                         print(f"Could not add column '{col_name}': {e}")

@@ -1103,6 +1103,27 @@
                             </label>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Recurring</label>
+                            <label class="switch" style="margin-top: 8px;">
+                                <input type="checkbox" id="eventRecurring" onchange="toggleRecurrenceOptions()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="form-group" id="recurrenceRuleGroup" style="display: none;">
+                            <label class="form-label">Repeat</label>
+                            <select id="eventRecurrenceRule" class="form-input">
+                                <option value="weekly">Weekly</option>
+                                <option value="biweekly">Bi-weekly</option>
+                                <option value="monthly">Monthly</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="recurrenceEndGroup" style="display: none;">
+                            <label class="form-label">Until</label>
+                            <input type="datetime-local" id="eventRecurrenceEndDate" class="form-input">
+                        </div>
+                    </div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEventModal()">Cancel</button>
