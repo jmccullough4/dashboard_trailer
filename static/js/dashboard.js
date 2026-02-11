@@ -107,7 +107,7 @@ function initNavigation() {
         'sensors': 'Sensor Dashboard',
         'tasks': 'Task Board',
         'files': 'File Manager',
-        'appcontrol': 'iOS App C²',
+        'appcontrol': 'App C²',
         'admin': 'User Management',
         'settings': 'System Settings'
     };
@@ -125,7 +125,7 @@ function initNavigation() {
 
             pageTitle.textContent = titles[section] || 'Dashboard';
 
-            // Lazy-load App C&C data
+            // Lazy-load App C² data
             if (section === 'appcontrol') {
                 loadFlashSales();
                 loadPopUpLocations();
@@ -2022,7 +2022,7 @@ async function applyUpdate() {
 }
 
 // =============================================================================
-// App Command & Control - Flash Sales
+// App C² - Flash Sales
 // =============================================================================
 
 async function loadFlashSales() {
@@ -2174,7 +2174,7 @@ async function deleteFlashSale(saleId) {
 }
 
 // =============================================================================
-// App Command & Control - Pop-Up Locations
+// App C² - Pop-Up Locations
 // =============================================================================
 
 async function loadPopUpLocations() {
@@ -2387,7 +2387,7 @@ async function deletePopUpLocation(locId) {
 }
 
 // =============================================================================
-// App Command & Control - Square Config & Stats
+// App C² - Square Config & Stats
 // =============================================================================
 
 async function loadAppControlStats() {
@@ -2548,7 +2548,7 @@ async function saveSquareConfig(event) {
 }
 
 // =============================================================================
-// App Command & Control - Announcements
+// App C² - Announcements
 // =============================================================================
 
 async function loadAnnouncements() {
@@ -2685,7 +2685,7 @@ async function deleteAnnouncement(annId) {
 }
 
 // =============================================================================
-// App Command & Control - Events
+// App C² - Events
 // =============================================================================
 
 async function loadEvents() {

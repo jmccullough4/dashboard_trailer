@@ -39,6 +39,14 @@ try:
 except ImportError:
     APNS_AVAILABLE = False
 
+# Firebase Cloud Messaging imports for Android
+try:
+    import google.auth.transport.requests
+    from google.oauth2 import service_account
+    FCM_AVAILABLE = True
+except ImportError:
+    FCM_AVAILABLE = False
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -2316,6 +2324,134 @@ def send_push_notification(title, body, badge=1):
         return {'sent': 0, 'error': str(e)}
 
 
+def send_fcm_notification(title, body):
+    """Send push notification to all registered Android devices via Firebase Cloud Messaging v1 API."""
+    if not FCM_AVAILABLE:
+        print("FCM not available - google-auth package not installed")
+        return {'sent': 0, 'error': 'google-auth not installed'}
+
+    # FCM service account key file path
+    fcm_key_path = os.environ.get('FCM_KEY_PATH', './firebase-service-account.json')
+    fcm_project_id = os.environ.get('FCM_PROJECT_ID', '')
+
+    if not os.path.exists(fcm_key_path):
+        print(f"FCM service account key not found: {fcm_key_path}")
+        return {'sent': 0, 'error': f'FCM key file not found: {fcm_key_path}'}
+
+    try:
+        # Load service account credentials
+        credentials = service_account.Credentials.from_service_account_file(
+            fcm_key_path,
+            scopes=['https://www.googleapis.com/auth/firebase.messaging']
+        )
+
+        # Get project ID from credentials if not set
+        if not fcm_project_id:
+            with open(fcm_key_path, 'r') as f:
+                key_data = json.load(f)
+                fcm_project_id = key_data.get('project_id', '')
+
+        if not fcm_project_id:
+            return {'sent': 0, 'error': 'FCM project ID not found'}
+
+        # Refresh credentials to get access token
+        auth_request = google.auth.transport.requests.Request()
+        credentials.refresh(auth_request)
+        access_token = credentials.token
+
+        # Get all active Android device tokens
+        all_tokens = DeviceToken.query.filter_by(is_active=True, platform='android').all()
+
+        # Deduplicate: keep only one record per device_id (most recently seen)
+        seen_devices = {}
+        for d in all_tokens:
+            key = d.device_id or d.token
+            if key not in seen_devices or (d.last_seen and d.last_seen > seen_devices[key].last_seen):
+                seen_devices[key] = d
+        tokens = list(seen_devices.values())
+
+        if not tokens:
+            msg = f"No Android tokens ({len(all_tokens)} total devices)"
+            print(msg)
+            return {'sent': 0, 'total_devices': len(all_tokens), 'valid_tokens': 0, 'error': msg}
+
+        fcm_url = f"https://fcm.googleapis.com/v1/projects/{fcm_project_id}/messages:send"
+
+        sent = 0
+        errors = []
+
+        for device in tokens:
+            try:
+                message = {
+                    "message": {
+                        "token": device.token,
+                        "notification": {
+                            "title": title,
+                            "body": body
+                        },
+                        "android": {
+                            "priority": "high",
+                            "notification": {
+                                "sound": "default",
+                                "channel_id": "general"
+                            }
+                        }
+                    }
+                }
+
+                headers = {
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json'
+                }
+
+                print(f"FCM sending to {device.token[:20]}...")
+                resp = requests.post(fcm_url, json=message, headers=headers)
+                print(f"FCM {resp.status_code} for {device.token[:20]}...")
+
+                if resp.status_code == 200:
+                    sent += 1
+                else:
+                    err_body = resp.text
+                    print(f"FCM FAILED for {device.token[:20]}...: {resp.status_code} {err_body}")
+                    errors.append(f"{device.token[:20]}: {resp.status_code}")
+
+                    # Mark invalid tokens as inactive
+                    if resp.status_code in (400, 404):
+                        try:
+                            err_data = resp.json()
+                            if 'UNREGISTERED' in str(err_data) or 'INVALID_ARGUMENT' in str(err_data):
+                                device.is_active = False
+                        except:
+                            pass
+
+            except Exception as e:
+                print(f"Failed to send FCM to {device.token[:20]}...: {e}")
+                errors.append(str(e))
+
+        db.session.commit()
+        print(f"FCM notifications sent: {sent}/{len(tokens)}")
+        result = {'sent': sent, 'total_devices': len(all_tokens), 'valid_tokens': len(tokens)}
+        if errors:
+            result['errors'] = errors
+        return result
+
+    except Exception as e:
+        print(f"FCM error: {e}")
+        return {'sent': 0, 'error': str(e)}
+
+
+def send_all_push_notifications(title, body, badge=1):
+    """Send push notifications to both iOS (APNs) and Android (FCM) devices."""
+    ios_result = send_push_notification(title, body, badge)
+    android_result = send_fcm_notification(title, body)
+
+    return {
+        'ios': ios_result,
+        'android': android_result,
+        'total_sent': ios_result.get('sent', 0) + android_result.get('sent', 0)
+    }
+
+
 # =============================================================================
 # Square Catalog API Integration
 # =============================================================================
@@ -2585,7 +2721,7 @@ def create_flash_sale():
     if sale.is_active:
         discount = int(((sale.original_price - sale.sale_price) / sale.original_price) * 100) if sale.original_price > 0 else 0
         action = "New" if not sale_id else "Updated"
-        push_result = send_push_notification(
+        push_result = send_all_push_notifications(
             f"3 Strands Flash Sale!",
             f"{action}: {sale.title} — {discount}% off! ${sale.sale_price:.2f}/lb"
         )
@@ -2665,7 +2801,7 @@ def create_popup_location():
     if loc.is_active:
         date_str = loc.date.strftime('%b %d') if loc.date else ''
         action = "New" if not loc_id else "Updated"
-        push_result = send_push_notification(
+        push_result = send_all_push_notifications(
             f"3 Strands is Coming to You!",
             f"{action}: {loc.title} — {date_str} at {loc.location}"
         )
@@ -2725,7 +2861,7 @@ def create_announcement():
     db.session.commit()
 
     # Send push notification to all devices
-    push_result = send_push_notification(title, message)
+    push_result = send_all_push_notifications(title, message)
     print(f"Announcement push result: {push_result}")
 
     return jsonify({'success': True, 'announcement': announcement.to_dict(), 'push_result': push_result})
@@ -2828,7 +2964,7 @@ def create_or_update_event():
     push_result = None
     if not event_id and event.is_active:
         date_str = event.start_date.strftime('%b %d') if event.start_date else ''
-        push_result = send_push_notification(
+        push_result = send_all_push_notifications(
             "3 Strands Event!",
             f"{event.title} — {date_str}"
         )
@@ -2981,11 +3117,11 @@ def test_push_notification():
     if not current_user.is_admin:
         return jsonify({'error': 'Admin required'}), 403
 
-    result = send_push_notification(
+    result = send_all_push_notifications(
         "3 Strands Test",
         "Push notifications are working! You'll receive alerts for flash sales and pop-up locations."
     )
-    return jsonify({'success': result.get('sent', 0) > 0, **result})
+    return jsonify({'success': result.get('total_sent', 0) > 0, **result})
 
 
 @app.route('/api/devices', methods=['GET'])

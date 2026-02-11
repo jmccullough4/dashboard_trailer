@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-3 Strands Cattle Co. Ranch Command Center - a Flask-based dashboard for managing IoT sensors, tasks, files, and mobile app content for a cattle ranch business. The application integrates with multiple external APIs and supports an iOS companion app.
+3 Strands Cattle Co. Ranch Command Center - a Flask-based dashboard for managing IoT sensors, tasks, files, and mobile app content for a cattle ranch business. The application integrates with multiple external APIs and supports iOS and Android companion apps.
 
 ## Development Commands
 
@@ -36,7 +36,7 @@ The entire backend is contained in `app.py` (~2900 lines) organized into section
    - `EcoFlowConfig`, `EcoFlowReading` - EcoFlow battery monitoring
    - `SquareConfig` - Square POS integration
    - `AppFlashSale`, `PopUpLocation`, `Announcement` - mobile app content
-   - `DeviceToken` - iOS push notification tokens
+   - `DeviceToken` - push notification tokens (iOS and Android)
 
 2. **API Integration Classes**:
    - `YoLinkAPI` - IoT sensor data (temperature, humidity, door sensors)
@@ -51,10 +51,10 @@ The entire backend is contained in `app.py` (~2900 lines) organized into section
    - YoLink routes (`/api/yolink/*`) - sensor data
    - EcoFlow routes (`/api/ecoflow/*`) - battery status/control
    - Version/Update routes (`/api/version`, `/api/updates/*`) - git-based updates
-   - **Public routes** (`/api/public/*`) - no auth, for iOS app
+   - **Public routes** (`/api/public/*`) - no auth, for mobile apps
    - Admin routes for mobile content (`/api/admin/flash-sales/*`, etc.)
 
-4. **Push Notifications**: APNs HTTP/2 implementation supporting both production and sandbox environments
+4. **Push Notifications**: APNs HTTP/2 for iOS (production/sandbox) and Firebase Cloud Messaging v1 API for Android
 
 ### Database
 
@@ -76,3 +76,4 @@ Jinja2 templates (`templates/`) with static assets in `static/css/` and `static/
 
 - `SECRET_KEY` - Flask session key (auto-generated if not set)
 - `APNS_KEY_PATH`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID` - iOS push notifications
+- `FCM_KEY_PATH`, `FCM_PROJECT_ID` - Android push notifications (Firebase Cloud Messaging)
