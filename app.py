@@ -2596,6 +2596,98 @@ def public_announcements():
     return jsonify([a.to_dict() for a in announcements])
 
 
+@app.route('/api/public/notifications', methods=['GET'])
+def public_notifications():
+    """Return recent notifications for polling-based mobile apps (Android).
+
+    Query params:
+    - since: ISO timestamp to get notifications after (optional)
+    - limit: max number of notifications to return (default 20)
+
+    Returns a unified list of flash sales, pop-ups, announcements, and events
+    created/updated since the given timestamp, sorted by date descending.
+    """
+    since_str = request.args.get('since')
+    limit = min(request.args.get('limit', 20, type=int), 100)
+
+    since = None
+    if since_str:
+        try:
+            since = datetime.fromisoformat(since_str.replace('Z', '+00:00'))
+        except:
+            pass
+
+    notifications = []
+
+    # Get recent flash sales
+    flash_query = AppFlashSale.query.filter_by(is_active=True)
+    if since:
+        flash_query = flash_query.filter(AppFlashSale.created_at > since)
+    for sale in flash_query.order_by(AppFlashSale.created_at.desc()).limit(limit).all():
+        discount = int(((sale.original_price - sale.sale_price) / sale.original_price) * 100) if sale.original_price > 0 else 0
+        notifications.append({
+            'id': f'flash_{sale.id}',
+            'type': 'flash_sale',
+            'title': '3 Strands Flash Sale!',
+            'body': f"{sale.title} — {discount}% off! ${sale.sale_price:.2f}/lb",
+            'created_at': sale.created_at.isoformat() if sale.created_at else None,
+            'data': sale.to_dict()
+        })
+
+    # Get recent pop-up locations
+    popup_query = PopUpLocation.query.filter_by(is_active=True)
+    if since:
+        popup_query = popup_query.filter(PopUpLocation.created_at > since)
+    for loc in popup_query.order_by(PopUpLocation.created_at.desc()).limit(limit).all():
+        date_str = loc.date.strftime('%b %d') if loc.date else ''
+        notifications.append({
+            'id': f'popup_{loc.id}',
+            'type': 'popup',
+            'title': '3 Strands is Coming to You!',
+            'body': f"{loc.title} — {date_str} at {loc.location}",
+            'created_at': loc.created_at.isoformat() if loc.created_at else None,
+            'data': loc.to_dict()
+        })
+
+    # Get recent announcements
+    ann_query = Announcement.query.filter_by(is_active=True)
+    if since:
+        ann_query = ann_query.filter(Announcement.created_at > since)
+    for ann in ann_query.order_by(Announcement.created_at.desc()).limit(limit).all():
+        notifications.append({
+            'id': f'announcement_{ann.id}',
+            'type': 'announcement',
+            'title': ann.title,
+            'body': ann.message,
+            'created_at': ann.created_at.isoformat() if ann.created_at else None,
+            'data': ann.to_dict()
+        })
+
+    # Get recent events
+    event_query = Event.query.filter_by(is_active=True)
+    if since:
+        event_query = event_query.filter(Event.created_at > since)
+    for event in event_query.order_by(Event.created_at.desc()).limit(limit).all():
+        date_str = event.start_date.strftime('%b %d') if event.start_date else ''
+        notifications.append({
+            'id': f'event_{event.id}',
+            'type': 'event',
+            'title': '3 Strands Event!',
+            'body': f"{event.title} — {date_str}",
+            'created_at': event.created_at.isoformat() if event.created_at else None,
+            'data': event.to_dict()
+        })
+
+    # Sort all by created_at descending and limit
+    notifications.sort(key=lambda x: x['created_at'] or '', reverse=True)
+    notifications = notifications[:limit]
+
+    return jsonify({
+        'notifications': notifications,
+        'server_time': datetime.utcnow().isoformat()
+    })
+
+
 @app.route('/api/public/register-device', methods=['POST'])
 def public_register_device():
     """Register a device for push notifications"""
