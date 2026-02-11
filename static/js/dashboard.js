@@ -1727,7 +1727,7 @@ function createPowerStationCard(device) {
             </div>
         ` : ''}
 
-        <!-- Stats -->
+        <!-- Stats Row 1 -->
         <div class="compact-stats">
             <div class="compact-stat">
                 <i class="fas fa-thermometer-half"></i>
@@ -1743,6 +1743,25 @@ function createPowerStationCard(device) {
                 <i class="fas fa-shield-alt"></i>
                 <span class="stat-value">${device.backup_reserve ? device.backup_reserve + '%' : '--'}</span>
                 <span class="stat-label">Reserve</span>
+            </div>
+        </div>
+
+        <!-- Stats Row 2 -->
+        <div class="compact-stats">
+            <div class="compact-stat">
+                <i class="fas fa-sync-alt"></i>
+                <span class="stat-value">${device.cycles !== undefined ? device.cycles : '--'}</span>
+                <span class="stat-label">Cycles</span>
+            </div>
+            <div class="compact-stat">
+                <i class="fas fa-heart"></i>
+                <span class="stat-value">${device.soh !== undefined ? device.soh + '%' : '--'}</span>
+                <span class="stat-label">Health</span>
+            </div>
+            <div class="compact-stat">
+                <i class="fas fa-plug"></i>
+                <span class="stat-value">${device.ac_output_watts ? device.ac_output_watts + 'W' : '--'}</span>
+                <span class="stat-label">AC Out</span>
             </div>
         </div>
     `;

@@ -2466,7 +2466,6 @@ select.form-input {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    flex: 1;
 }
 
 .sensor-item {
@@ -2686,7 +2685,7 @@ select.form-input {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 25px;
-    align-items: stretch;
+    align-items: start;
 }
 
 /* Power Station Card */

@@ -766,14 +766,18 @@ class EcoFlowAPI:
 
     @staticmethod
     def parse_status(data):
-        """Parse raw EcoFlow data into a user-friendly format"""
+        """Parse raw EcoFlow data into a user-friendly format.
+
+        Handles both Delta 2 Max and River 2 Pro which have different data structures.
+        """
         if not data or 'error' in data:
             return data
 
         raw = data.get('data', data)
 
         # Calculate remaining time display
-        remain_time = raw.get('pd.remainTime', 0)
+        # Try multiple possible fields for remain time
+        remain_time = raw.get('pd.remainTime') or raw.get('bms_bmsStatus.remainTime') or raw.get('bms_emsStatus.dsgRemainTime', 0)
         if remain_time and remain_time != 5999:
             hours = abs(remain_time) // 60
             mins = abs(remain_time) % 60
@@ -785,14 +789,33 @@ class EcoFlowAPI:
             time_display = "Calculating..."
 
         # Determine charging/discharging state
-        watts_in = raw.get('pd.wattsInSum', 0)
-        watts_out = raw.get('pd.wattsOutSum', 0)
+        watts_in = raw.get('pd.wattsInSum') or raw.get('inv.inputWatts', 0) or 0
+        watts_out = raw.get('pd.wattsOutSum') or raw.get('inv.outputWatts', 0) or 0
         if watts_in > watts_out:
             state = 'charging'
         elif watts_out > 0:
             state = 'discharging'
         else:
             state = 'idle'
+
+        # Battery temperature - try multiple fields (Delta uses bms_bmsStatus.temp, River may use others)
+        battery_temp = raw.get('bms_bmsStatus.temp') or raw.get('bms_bmsStatus.maxCellTemp')
+
+        # AC enabled - Delta uses inv.cfgAcEnabled, River uses mppt.cfgAcEnabled
+        ac_enabled = raw.get('inv.cfgAcEnabled', raw.get('mppt.cfgAcEnabled', 0)) == 1
+
+        # AC output watts - try multiple fields
+        ac_output_watts = raw.get('inv.outputWatts') or raw.get('inv.inputWatts', 0) or 0
+
+        # X-Boost - Delta uses inv.cfgAcXboost, River uses mppt.cfgAcXboost
+        ac_xboost = raw.get('inv.cfgAcXboost', raw.get('mppt.cfgAcXboost', 0)) == 1
+
+        # Fast charge watts - River 2 Pro doesn't report this, use rated power if available
+        fast_charge_watts = raw.get('inv.FastChgWatts') or raw.get('inv.acChgRatedPower', 0) or 0
+
+        # Solar input
+        solar_in_watts = raw.get('mppt.inWatts', 0) or 0
+        solar_in_vol = raw.get('mppt.inVol', 0) or 0
 
         return {
             'configured': True,
@@ -803,24 +826,31 @@ class EcoFlowAPI:
             'state': state,
             'remain_time': remain_time,
             'remain_time_display': time_display,
-            'ac_enabled': raw.get('inv.cfgAcEnabled', 0) == 1,
-            'ac_output_watts': raw.get('inv.outputWatts', 0),
-            'ac_xboost': raw.get('inv.cfgAcXboost', 0) == 1,
-            'dc_enabled': raw.get('pd.dcOutState', 0) == 1,
-            'battery_temp': raw.get('bms_bmsStatus.temp'),
+            'ac_enabled': ac_enabled,
+            'ac_output_watts': ac_output_watts,
+            'ac_xboost': ac_xboost,
+            'dc_enabled': raw.get('pd.dcOutState', raw.get('pd.carState', 0)) == 1,
+            'battery_temp': battery_temp,
             'inv_temp': raw.get('inv.outTemp'),
-            'solar_in_watts': raw.get('mppt.inWatts', 0),
-            'solar_in_volts': (raw.get('mppt.inVol', 0) or 0) / 10,
-            'car_out_watts': raw.get('mppt.carOutWatts', 0),
-            'car_state': raw.get('mppt.carState', 0) == 1,
+            'solar_in_watts': solar_in_watts,
+            'solar_in_volts': solar_in_vol / 10 if solar_in_vol else 0,
+            'car_out_watts': raw.get('mppt.carOutWatts') or raw.get('pd.carWatts', 0) or 0,
+            'car_state': raw.get('mppt.carState', raw.get('pd.carState', 0)) == 1,
             'beep_mode': raw.get('pd.beepMode', 0) == 0,  # 0 = normal, 1 = mute
             'brightness': raw.get('pd.brightLevel', 3),
             'standby_min': raw.get('pd.standbyMin', 0),
-            'fast_charge_watts': raw.get('inv.FastChgWatts', 0),
-            'slow_charge_watts': raw.get('inv.SlowChgWatts', 0),
+            'fast_charge_watts': fast_charge_watts,
+            'slow_charge_watts': raw.get('inv.SlowChgWatts', 0) or 0,
             'max_charge_soc': raw.get('bms_emsStatus.maxChargeSoc', 100),
             'min_discharge_soc': raw.get('bms_emsStatus.minDsgSoc', 0),
-            'backup_reserve': raw.get('pd.bpPowerSoc', 0)
+            'backup_reserve': raw.get('pd.bpPowerSoc', 0),
+            # Additional data for display
+            'usb1_watts': raw.get('pd.usb1Watts', 0) or 0,
+            'usb2_watts': raw.get('pd.usb2Watts', 0) or 0,
+            'typec1_watts': raw.get('pd.typec1Watts', 0) or 0,
+            'typec2_watts': raw.get('pd.typec2Watts', 0) or 0,
+            'cycles': raw.get('bms_bmsStatus.cycles') or raw.get('bms_bmsInfo.bsmCycles', 0) or 0,
+            'soh': raw.get('bms_bmsStatus.soh', 100),
         }
 
 
