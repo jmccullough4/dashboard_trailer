@@ -130,6 +130,7 @@ function initNavigation() {
                 loadFlashSales();
                 loadPopUpLocations();
                 loadAnnouncements();
+                loadEvents();
                 loadAppControlStats();
             }
 
@@ -2680,6 +2681,216 @@ async function deleteAnnouncement(annId) {
         }
     } catch (error) {
         showToast('Error deleting announcement', 'error');
+    }
+}
+
+// =============================================================================
+// App Command & Control - Events
+// =============================================================================
+
+async function loadEvents() {
+    try {
+        const response = await fetch('/api/events');
+        const events = await response.json();
+        renderEventsTable(events);
+    } catch (error) {
+        console.error('Error loading events:', error);
+    }
+}
+
+function renderEventsTable(events) {
+    const tbody = document.getElementById('eventsTableBody');
+    const empty = document.getElementById('eventsEmpty');
+    if (!tbody) return;
+
+    if (events.length === 0) {
+        tbody.innerHTML = '';
+        if (empty) empty.style.display = 'flex';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = events.map(evt => {
+        const startDate = new Date(evt.start_date);
+        const endDate = evt.end_date ? new Date(evt.end_date) : null;
+        const now = new Date();
+        const isPast = startDate < now;
+        const statusClass = !evt.is_active ? 'inactive' : isPast ? 'expired' : 'active';
+        const statusText = !evt.is_active ? 'Inactive' : isPast ? 'Past' : 'Upcoming';
+
+        const startStr = `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        const endStr = endDate ? `${endDate.toLocaleDateString()} ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : '--';
+
+        return `<tr>
+            <td><strong>${escapeHtml(evt.title)}</strong></td>
+            <td>${escapeHtml(evt.location || '--')}</td>
+            <td>${startStr}</td>
+            <td>${endStr}</td>
+            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
+            <td>
+                <button class="btn btn-sm btn-icon" onclick="editEvent(${evt.id})" title="Edit"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deleteEvent(${evt.id})" title="Delete"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showEventModal(eventId = null) {
+    document.getElementById('eventId').value = '';
+    document.getElementById('eventTitle').value = '';
+    document.getElementById('eventDescription').value = '';
+    document.getElementById('eventLocation').value = '';
+    document.getElementById('eventLatitude').value = '';
+    document.getElementById('eventLongitude').value = '';
+    document.getElementById('eventIcon').value = 'leaf.fill';
+    document.getElementById('eventActive').checked = true;
+    clearEventGeocodeStatus();
+
+    // Default start date to now, end date to now + 4 hours
+    const now = new Date();
+    const endTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    document.getElementById('eventStartDate').value = toLocalISOString(now);
+    document.getElementById('eventEndDate').value = toLocalISOString(endTime);
+
+    document.getElementById('eventModalTitle').innerHTML = '<i class="fas fa-calendar-alt"></i> New Event';
+    document.getElementById('eventModal').classList.add('show');
+}
+
+function closeEventModal() {
+    document.getElementById('eventModal').classList.remove('show');
+}
+
+async function editEvent(eventId) {
+    try {
+        const response = await fetch('/api/events');
+        const events = await response.json();
+        const evt = events.find(e => e.id === eventId);
+        if (!evt) return;
+
+        document.getElementById('eventId').value = evt.id;
+        document.getElementById('eventTitle').value = evt.title;
+        document.getElementById('eventDescription').value = evt.description || '';
+        document.getElementById('eventLocation').value = evt.location || '';
+        document.getElementById('eventLatitude').value = evt.latitude || '';
+        document.getElementById('eventLongitude').value = evt.longitude || '';
+        document.getElementById('eventIcon').value = evt.icon || 'leaf.fill';
+        document.getElementById('eventActive').checked = evt.is_active;
+        clearEventGeocodeStatus();
+
+        if (evt.start_date) document.getElementById('eventStartDate').value = toLocalISOString(new Date(evt.start_date));
+        if (evt.end_date) document.getElementById('eventEndDate').value = toLocalISOString(new Date(evt.end_date));
+
+        document.getElementById('eventModalTitle').innerHTML = '<i class="fas fa-calendar-alt"></i> Edit Event';
+        document.getElementById('eventModal').classList.add('show');
+    } catch (error) {
+        showToast('Error loading event details', 'error');
+    }
+}
+
+async function geocodeEventAddress() {
+    const address = document.getElementById('eventLocation').value.trim();
+    if (!address) { showToast('Enter an address first', 'error'); return; }
+
+    setEventGeocodeStatus('Looking up coordinates...', 'loading');
+
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`);
+        const results = await response.json();
+        if (results.length > 0) {
+            document.getElementById('eventLatitude').value = parseFloat(results[0].lat).toFixed(6);
+            document.getElementById('eventLongitude').value = parseFloat(results[0].lon).toFixed(6);
+            setEventGeocodeStatus('Coordinates found!', 'success');
+        } else {
+            setEventGeocodeStatus('No results found', 'error');
+        }
+    } catch (error) {
+        setEventGeocodeStatus('Lookup failed', 'error');
+    }
+}
+
+async function reverseGeocodeEvent() {
+    const lat = document.getElementById('eventLatitude').value;
+    const lon = document.getElementById('eventLongitude').value;
+    if (!lat || !lon) { showToast('Enter coordinates first', 'error'); return; }
+
+    setEventGeocodeStatus('Looking up address...', 'loading');
+
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+        const result = await response.json();
+        if (result.display_name) {
+            document.getElementById('eventLocation').value = result.display_name;
+            setEventGeocodeStatus('Address found!', 'success');
+        } else {
+            setEventGeocodeStatus('No address found', 'error');
+        }
+    } catch (error) {
+        setEventGeocodeStatus('Lookup failed', 'error');
+    }
+}
+
+function setEventGeocodeStatus(message, type) {
+    const el = document.getElementById('eventGeocodeStatus');
+    if (el) {
+        el.textContent = message;
+        el.className = 'geocode-status ' + type;
+        el.style.display = 'block';
+    }
+}
+
+function clearEventGeocodeStatus() {
+    const el = document.getElementById('eventGeocodeStatus');
+    if (el) { el.textContent = ''; el.style.display = 'none'; }
+}
+
+async function saveEvent(event) {
+    event.preventDefault();
+    const eventId = document.getElementById('eventId').value;
+    const data = {
+        title: document.getElementById('eventTitle').value,
+        description: document.getElementById('eventDescription').value,
+        location: document.getElementById('eventLocation').value,
+        latitude: document.getElementById('eventLatitude').value || null,
+        longitude: document.getElementById('eventLongitude').value || null,
+        start_date: document.getElementById('eventStartDate').value,
+        end_date: document.getElementById('eventEndDate').value || null,
+        icon: document.getElementById('eventIcon').value,
+        is_active: document.getElementById('eventActive').checked
+    };
+    if (eventId) data.id = parseInt(eventId);
+
+    try {
+        const response = await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast(eventId ? 'Event updated' : 'Event created');
+            closeEventModal();
+            loadEvents();
+        } else {
+            showToast(result.error || 'Failed to save', 'error');
+        }
+    } catch (error) {
+        showToast('Error saving event', 'error');
+    }
+}
+
+async function deleteEvent(eventId) {
+    if (!confirm('Delete this event?')) return;
+    try {
+        const response = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Event deleted');
+            loadEvents();
+        } else {
+            showToast(data.error || 'Failed to delete', 'error');
+        }
+    } catch (error) {
+        showToast('Error deleting event', 'error');
     }
 }
 

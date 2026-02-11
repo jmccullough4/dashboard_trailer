@@ -342,6 +342,35 @@
                     </div>
                 </div>
 
+                <!-- Events Management -->
+                <div class="cc-panel">
+                    <div class="cc-panel-header">
+                        <h4><i class="fas fa-calendar-alt"></i> Events</h4>
+                        <button class="btn btn-primary btn-sm" onclick="showEventModal()">
+                            <i class="fas fa-plus"></i> New Event
+                        </button>
+                    </div>
+                    <div class="cc-table-container">
+                        <table class="admin-table" id="eventsTable">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Location</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="eventsTableBody"></tbody>
+                        </table>
+                        <div class="cc-empty" id="eventsEmpty" style="display: none;">
+                            <i class="fas fa-calendar"></i>
+                            <p>No events yet. Create one to push to the app.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Square & Device Stats -->
                 <div class="cc-stats-row">
                     <div class="cc-stat-card">
@@ -996,6 +1025,88 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeAnnouncementModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send to All Users</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Event Modal -->
+    <div class="modal" id="eventModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="eventModalTitle"><i class="fas fa-calendar-alt"></i> New Event</h3>
+                <button class="modal-close" onclick="closeEventModal()">&times;</button>
+            </div>
+            <form id="eventForm" onsubmit="saveEvent(event)">
+                <input type="hidden" id="eventId" value="">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input type="text" id="eventTitle" class="form-input" placeholder="Lauderdale by the Sea Market" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea id="eventDescription" class="form-input" rows="3" placeholder="Event description..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Location / Address</label>
+                        <div class="input-with-action">
+                            <input type="text" id="eventLocation" class="form-input" placeholder="4500 El Mar Dr., Lauderdale-by-the-Sea">
+                            <button type="button" class="btn btn-sm btn-accent" onclick="geocodeEventAddress()" title="Lookup coordinates from address">
+                                <i class="fas fa-search-location"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" id="eventLatitude" class="form-input" step="any" placeholder="26.1901">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" id="eventLongitude" class="form-input" step="any" placeholder="-80.0966">
+                        </div>
+                        <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">
+                            <button type="button" class="btn btn-sm btn-accent" onclick="reverseGeocodeEvent()" title="Lookup address from coordinates">
+                                <i class="fas fa-map-pin"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="geocode-status" id="eventGeocodeStatus"></div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Start Date & Time</label>
+                            <input type="datetime-local" id="eventStartDate" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">End Date & Time</label>
+                            <input type="datetime-local" id="eventEndDate" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Icon (SF Symbol)</label>
+                            <select id="eventIcon" class="form-input">
+                                <option value="leaf.fill">Leaf (Market)</option>
+                                <option value="calendar.fill">Calendar</option>
+                                <option value="mappin.circle.fill">Map Pin</option>
+                                <option value="star.fill">Star</option>
+                                <option value="storefront.fill">Storefront</option>
+                                <option value="cart.fill">Cart</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Active</label>
+                            <label class="switch" style="margin-top: 8px;">
+                                <input type="checkbox" id="eventActive" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEventModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Event</button>
                 </div>
             </form>
         </div>

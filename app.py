@@ -356,6 +356,37 @@ class Announcement(db.Model):
         }
 
 
+class Event(db.Model):
+    """Events for the mobile app"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    location = db.Column(db.String(500))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    start_date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime)
+    icon = db.Column(db.String(100), default='leaf.fill')
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description or '',
+            'location': self.location or '',
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'icon': self.icon,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 # =============================================================================
 # User Loader
 # =============================================================================
@@ -2308,10 +2339,8 @@ def public_catalog():
 
 @app.route('/api/public/events', methods=['GET'])
 def public_events():
-    """Return upcoming pop-up locations/events for the mobile app"""
-    events = PopUpLocation.query.filter_by(is_active=True).filter(
-        PopUpLocation.date >= datetime.utcnow()
-    ).order_by(PopUpLocation.date.asc()).all()
+    """Return active events for the mobile app"""
+    events = Event.query.filter_by(is_active=True).order_by(Event.start_date.asc()).all()
     return jsonify([e.to_dict() for e in events])
 
 
@@ -2650,6 +2679,87 @@ def delete_announcement(ann_id):
 
 
 # =============================================================================
+# Admin: Events Management
+# =============================================================================
+
+@app.route('/api/events', methods=['GET'])
+@login_required
+def get_events():
+    """Get all events (admin view - includes inactive)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    events = Event.query.order_by(Event.start_date.desc()).all()
+    return jsonify([e.to_dict() for e in events])
+
+
+@app.route('/api/events', methods=['POST'])
+@login_required
+def create_or_update_event():
+    """Create or update an event and send push notification on create"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    event_id = data.get('id')
+    if event_id:
+        event = Event.query.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+    else:
+        event = Event()
+        db.session.add(event)
+
+    event.title = data.get('title', event.title if event_id else 'New Event')
+    event.description = data.get('description', '')
+    event.location = data.get('location', '')
+    event.icon = data.get('icon', 'leaf.fill')
+    event.is_active = data.get('is_active', True)
+
+    if data.get('latitude'):
+        event.latitude = float(data['latitude'])
+    if data.get('longitude'):
+        event.longitude = float(data['longitude'])
+
+    if data.get('start_date'):
+        event.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00').replace('+00:00', ''))
+    if data.get('end_date'):
+        event.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00').replace('+00:00', ''))
+
+    db.session.commit()
+
+    # Send push notification for new active events
+    push_result = None
+    if not event_id and event.is_active:
+        date_str = event.start_date.strftime('%b %d') if event.start_date else ''
+        push_result = send_push_notification(
+            "3 Strands Event!",
+            f"{event.title} — {date_str}"
+        )
+        print(f"Event push result: {push_result}")
+
+    return jsonify({'success': True, 'event': event.to_dict(), 'push_result': push_result})
+
+
+@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+@login_required
+def delete_event(event_id):
+    """Delete an event"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    event = Event.query.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    db.session.delete(event)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# =============================================================================
 # Admin: Square Configuration
 # =============================================================================
 
@@ -2924,6 +3034,37 @@ def init_db():
             db.session.add(square)
             db.session.commit()
             print("Seeded Square API configuration")
+
+        # Seed example events if none exist
+        if not Event.query.first():
+            events = [
+                Event(
+                    title='Lauderdale by the Sea Market',
+                    description='Weekly farmers market featuring local produce and artisan goods',
+                    location='4500 El Mar Dr., Lauderdale-by-the-Sea, FL',
+                    latitude=26.1934,
+                    longitude=-80.0962,
+                    start_date=datetime.utcnow() + timedelta(days=7),
+                    end_date=datetime.utcnow() + timedelta(days=7, hours=4),
+                    icon='leaf.fill',
+                    is_active=True
+                ),
+                Event(
+                    title='Olive Branch Market',
+                    description='Fresh local produce and handmade crafts',
+                    location='3750 NE Indian River Dr., Jensen Beach, FL',
+                    latitude=27.2506,
+                    longitude=-80.2289,
+                    start_date=datetime.utcnow() + timedelta(days=14),
+                    end_date=datetime.utcnow() + timedelta(days=14, hours=4),
+                    icon='leaf.fill',
+                    is_active=True
+                )
+            ]
+            for event in events:
+                db.session.add(event)
+            db.session.commit()
+            print("Seeded example events")
 
 
 # =============================================================================
