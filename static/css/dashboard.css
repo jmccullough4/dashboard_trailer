@@ -401,6 +401,34 @@ body {
     font-size: 12px;
     color: var(--text-muted);
     font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.toggle-label.active {
+    color: var(--primary-gold);
+    text-shadow: 0 0 8px var(--glow-gold);
+}
+
+/* Toggle with On/Off labels */
+.toggle-with-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.toggle-with-label .toggle-status {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 30px;
+}
+
+.toggle-with-label .toggle-status.on {
+    color: #00d4aa;
+}
+
+.toggle-with-label .toggle-status.off {
+    color: var(--text-muted);
 }
 
 .switch {
@@ -2693,7 +2721,7 @@ select.form-input {
     background: linear-gradient(145deg, var(--panel-bg), var(--rich-brown));
     border: 1px solid rgba(212, 168, 83, 0.25);
     border-radius: 12px;
-    padding: 20px;
+    padding: 14px 16px;
     position: relative;
     overflow: hidden;
     display: flex;
@@ -2710,6 +2738,176 @@ select.form-input {
     background: linear-gradient(90deg, var(--neon-green), var(--primary-gold), var(--neon-orange));
 }
 
+/* Compact Header with inline battery */
+.power-card-header-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(212, 168, 83, 0.15);
+}
+
+.power-card-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary-gold);
+    white-space: nowrap;
+}
+
+.power-card-name i {
+    font-size: 16px;
+}
+
+.power-card-battery {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mini-battery-bar {
+    flex: 1;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(212, 168, 83, 0.2);
+}
+
+.mini-battery-level {
+    height: 100%;
+    border-radius: 7px;
+    transition: width 0.5s ease;
+}
+
+.mini-battery-pct {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 42px;
+    text-align: right;
+}
+
+.power-card-actions {
+    display: flex;
+    gap: 4px;
+}
+
+/* Power Flow Row */
+.power-card-flow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.flow-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.flow-item i {
+    font-size: 11px;
+}
+
+.flow-item.in i {
+    color: #00d4aa;
+}
+
+.flow-item.out i {
+    color: #ffa500;
+}
+
+.flow-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    min-width: 90px;
+}
+
+.flow-state i {
+    font-size: 12px;
+}
+
+.flow-state span {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.flow-state small {
+    font-size: 9px;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.flow-state.idle {
+    color: var(--text-secondary);
+}
+
+.flow-state.charging {
+    color: #00d4aa;
+    background: rgba(0, 212, 170, 0.1);
+}
+
+.flow-state.discharging {
+    color: #ffa500;
+    background: rgba(255, 165, 0, 0.1);
+}
+
+/* Inline Stats Row */
+.power-card-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(212, 168, 83, 0.1);
+}
+
+.power-stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.power-stat i {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+.power-stat.solar {
+    color: #ffd700;
+}
+
+.power-stat.solar i {
+    opacity: 1;
+}
+
+.power-stat.temp i {
+    color: var(--neon-blue);
+}
+
+/* Legacy header styles for offline cards */
 .power-card-header {
     display: flex;
     justify-content: space-between;
@@ -3250,5 +3448,262 @@ select.form-input {
 @media (max-width: 768px) {
     .cc-stats-row {
         grid-template-columns: 1fr;
+    }
+}
+
+/* =============================================================================
+   App C² Section
+   ============================================================================= */
+
+.header-stat {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+}
+
+.header-stat i {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.app-control-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.app-panel-mini {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid rgba(212, 168, 83, 0.15);
+}
+
+.app-panel-mini-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(212, 168, 83, 0.15);
+}
+
+.app-panel-mini-header span {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-panel-mini-header span i {
+    font-size: 14px;
+    color: var(--primary-gold);
+}
+
+.btn-xs {
+    padding: 5px 10px;
+    font-size: 12px;
+    min-width: unset;
+}
+
+.app-panel-mini-content {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.mini-loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+}
+
+.mini-loading i {
+    font-size: 16px;
+}
+
+.mini-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 14px;
+}
+
+.mini-item:last-child {
+    border-bottom: none;
+}
+
+.mini-item-title {
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 12px;
+}
+
+.mini-item-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.mini-item-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 10px;
+}
+
+.mini-item-actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.mini-item-actions button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.mini-item-actions button.edit:hover {
+    color: var(--neon-blue);
+}
+
+.mini-item-actions button.delete:hover {
+    color: var(--neon-red);
+}
+
+.mini-item-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    margin-right: 10px;
+    font-size: 12px;
+}
+
+.mini-item-icon.popup {
+    background: rgba(57, 255, 20, 0.15);
+    color: var(--neon-green);
+}
+
+.mini-item-icon.calendar {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--neon-blue);
+}
+
+.mini-status {
+    padding: 4px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.mini-status.active {
+    background: rgba(57, 255, 20, 0.15);
+    color: var(--neon-green);
+}
+
+.mini-status.inactive {
+    background: rgba(139, 115, 85, 0.15);
+    color: var(--text-muted);
+}
+
+.mini-empty {
+    text-align: center;
+    padding: 30px 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.mini-empty i {
+    display: block;
+    font-size: 24px;
+    margin-bottom: 8px;
+    opacity: 0.4;
+}
+
+/* Device mini items */
+.mini-device {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 13px;
+}
+
+.mini-device:last-child {
+    border-bottom: none;
+}
+
+.mini-device > i {
+    font-size: 20px;
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.mini-device i.fa-apple {
+    color: #a2aaad;
+}
+
+.mini-device i.fa-android {
+    color: #3ddc84;
+}
+
+.mini-device-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mini-device-name {
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.mini-device-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mini-device-time {
+    color: var(--text-muted);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .app-control-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .app-control-stats {
+        display: none;
     }
 }

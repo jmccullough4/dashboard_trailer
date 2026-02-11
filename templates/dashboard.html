@@ -38,6 +38,12 @@
                 <i class="fas fa-satellite-dish"></i>
                 <span>Sensors</span>
             </a>
+            {% if user.is_admin %}
+            <a href="#" class="nav-item" data-section="appcontrol">
+                <i class="fas fa-mobile-alt"></i>
+                <span>App C²</span>
+            </a>
+            {% endif %}
             <a href="#" class="nav-item" data-section="tasks">
                 <i class="fas fa-tasks"></i>
                 <span>Tasks</span>
@@ -47,10 +53,6 @@
                 <span>Files</span>
             </a>
             {% if user.is_admin %}
-            <a href="#" class="nav-item" data-section="appcontrol">
-                <i class="fas fa-mobile-alt"></i>
-                <span>App C²</span>
-            </a>
             <a href="#" class="nav-item" data-section="admin">
                 <i class="fas fa-users-cog"></i>
                 <span>Admin</span>
@@ -110,12 +112,12 @@
                     <h3><i class="fas fa-truck"></i> ALPHA Trailer</h3>
                     <div class="section-actions">
                         <div class="temp-toggle">
-                            <label class="toggle-label">°F</label>
+                            <label class="toggle-label active" id="labelF">°F</label>
                             <label class="switch">
                                 <input type="checkbox" id="tempUnitToggle" onchange="toggleTempUnit()">
                                 <span class="slider"></span>
                             </label>
-                            <label class="toggle-label">°C</label>
+                            <label class="toggle-label" id="labelC">°C</label>
                         </div>
                         <button class="btn btn-secondary" onclick="showFdaReportModal()">
                             <i class="fas fa-file-pdf"></i> FDA Report
@@ -128,6 +130,16 @@
 
                 <!-- Unified Sensor & Power Grid -->
                 <div class="sensor-power-grid">
+                    <!-- Power Stations Container (dynamically rendered) -->
+                    <div class="power-stations-container" id="powerStationsContainer">
+                        <div class="power-station-card">
+                            <div class="ecoflow-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Loading power stations...</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Temperature Sensors Card -->
                     <div class="sensors-card" id="sensorsCard">
                         <div class="sensors-card-header">
@@ -157,16 +169,6 @@
                             <p>No sensors found</p>
                         </div>
                     </div>
-
-                    <!-- Power Stations Container (dynamically rendered) -->
-                    <div class="power-stations-container" id="powerStationsContainer">
-                        <div class="power-station-card">
-                            <div class="ecoflow-loading">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                <p>Loading power stations...</p>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Hidden sensors grid for fallback/loading states -->
@@ -177,6 +179,68 @@
                     <span>Auto-refresh: <span id="refreshCountdown">60</span>s</span>
                 </div>
             </section>
+
+            <!-- App C² Section -->
+            {% if user.is_admin %}
+            <section class="section" id="appcontrol-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-mobile-alt"></i> App C²</h3>
+                    <div class="section-actions">
+                        <span class="header-stat"><i class="fas fa-mobile-alt"></i> <span id="deviceCount">--</span> devices</span>
+                        <span class="header-stat"><i class="fas fa-bell"></i> <span id="apnsStatus">--</span></span>
+                        <button class="btn btn-sm btn-secondary" onclick="testPushNotification()" title="Test Push">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="app-control-grid">
+                    <!-- Flash Sales -->
+                    <div class="app-panel-mini">
+                        <div class="app-panel-mini-header">
+                            <span><i class="fas fa-bolt"></i> Flash Sales</span>
+                            <button class="btn btn-xs btn-primary" onclick="showFlashSaleModal()"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div class="app-panel-mini-content" id="flashSalesMini">
+                            <div class="mini-loading"><i class="fas fa-spinner fa-spin"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Events -->
+                    <div class="app-panel-mini">
+                        <div class="app-panel-mini-header">
+                            <span><i class="fas fa-calendar-alt"></i> Events</span>
+                            <button class="btn btn-xs btn-primary" onclick="showEventModal()"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div class="app-panel-mini-content" id="eventsMini">
+                            <div class="mini-loading"><i class="fas fa-spinner fa-spin"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Announcements -->
+                    <div class="app-panel-mini">
+                        <div class="app-panel-mini-header">
+                            <span><i class="fas fa-bullhorn"></i> Announcements</span>
+                            <button class="btn btn-xs btn-primary" onclick="showAnnouncementModal()"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div class="app-panel-mini-content" id="announcementsMini">
+                            <div class="mini-loading"><i class="fas fa-spinner fa-spin"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Devices -->
+                    <div class="app-panel-mini">
+                        <div class="app-panel-mini-header">
+                            <span><i class="fas fa-mobile-alt"></i> Devices</span>
+                            <button class="btn btn-xs btn-secondary" onclick="loadDeviceList()" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+                        </div>
+                        <div class="app-panel-mini-content" id="devicesMini">
+                            <div class="mini-loading"><i class="fas fa-spinner fa-spin"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
 
             <!-- Tasks Section (Trello-like) -->
             <section class="section" id="tasks-section">
@@ -247,192 +311,6 @@
                 </div>
             </section>
 
-            <!-- App C² Section -->
-            {% if user.is_admin %}
-            <section class="section" id="appcontrol-section">
-                <div class="section-header">
-                    <h3><i class="fas fa-mobile-alt"></i> App C²</h3>
-                </div>
-
-                <!-- Flash Sales Management -->
-                <div class="cc-panel">
-                    <div class="cc-panel-header">
-                        <h4><i class="fas fa-bolt"></i> Flash Sales</h4>
-                        <button class="btn btn-primary btn-sm" onclick="showFlashSaleModal()">
-                            <i class="fas fa-plus"></i> New Sale
-                        </button>
-                    </div>
-                    <div class="cc-table-container">
-                        <table class="admin-table" id="flashSalesTable">
-                            <thead>
-                                <tr>
-                                    <th>Title</th>
-                                    <th>Cut Type</th>
-                                    <th>Price</th>
-                                    <th>Sale Price</th>
-                                    <th>Expires</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="flashSalesTableBody"></tbody>
-                        </table>
-                        <div class="cc-empty" id="flashSalesEmpty" style="display: none;">
-                            <i class="fas fa-tags"></i>
-                            <p>No flash sales yet. Create one to push to the app.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pop-Up Locations Management -->
-                <div class="cc-panel">
-                    <div class="cc-panel-header">
-                        <h4><i class="fas fa-map-marker-alt"></i> Pop-Up Locations</h4>
-                        <button class="btn btn-primary btn-sm" onclick="showPopUpModal()">
-                            <i class="fas fa-plus"></i> New Location
-                        </button>
-                    </div>
-                    <div class="cc-table-container">
-                        <table class="admin-table" id="popUpTable">
-                            <thead>
-                                <tr>
-                                    <th>Event</th>
-                                    <th>Location</th>
-                                    <th>Coords</th>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="popUpTableBody"></tbody>
-                        </table>
-                        <div class="cc-empty" id="popUpEmpty" style="display: none;">
-                            <i class="fas fa-map-pin"></i>
-                            <p>No pop-up locations. Add farmers markets and events here.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Announcements Management -->
-                <div class="cc-panel">
-                    <div class="cc-panel-header">
-                        <h4><i class="fas fa-bullhorn"></i> Announcements</h4>
-                        <button class="btn btn-primary btn-sm" onclick="showAnnouncementModal()">
-                            <i class="fas fa-plus"></i> Send Announcement
-                        </button>
-                    </div>
-                    <div class="cc-table-container">
-                        <table class="admin-table" id="announcementsTable">
-                            <thead>
-                                <tr>
-                                    <th>Title</th>
-                                    <th>Message</th>
-                                    <th>Sent</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="announcementsTableBody"></tbody>
-                        </table>
-                        <div class="cc-empty" id="announcementsEmpty" style="display: none;">
-                            <i class="fas fa-bullhorn"></i>
-                            <p>No announcements yet. Send one to push to the app.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Events Management -->
-                <div class="cc-panel">
-                    <div class="cc-panel-header">
-                        <h4><i class="fas fa-calendar-alt"></i> Events</h4>
-                        <button class="btn btn-primary btn-sm" onclick="showEventModal()">
-                            <i class="fas fa-plus"></i> New Event
-                        </button>
-                    </div>
-                    <div class="cc-table-container">
-                        <table class="admin-table" id="eventsTable">
-                            <thead>
-                                <tr>
-                                    <th>Title</th>
-                                    <th>Location</th>
-                                    <th>Start Date</th>
-                                    <th>End Date</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="eventsTableBody"></tbody>
-                        </table>
-                        <div class="cc-empty" id="eventsEmpty" style="display: none;">
-                            <i class="fas fa-calendar"></i>
-                            <p>No events yet. Create one to push to the app.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Square & Device Stats -->
-                <div class="cc-stats-row">
-                    <div class="cc-stat-card">
-                        <div class="cc-stat-icon"><i class="fas fa-credit-card"></i></div>
-                        <div class="cc-stat-info">
-                            <span class="cc-stat-label">Square Catalog</span>
-                            <span class="cc-stat-value" id="squareStatus">Checking...</span>
-                        </div>
-                        <button class="btn btn-sm btn-icon" onclick="showSquareConfigModal()" title="Configure">
-                            <i class="fas fa-cog"></i>
-                        </button>
-                    </div>
-                    <div class="cc-stat-card">
-                        <div class="cc-stat-icon"><i class="fas fa-mobile-alt"></i></div>
-                        <div class="cc-stat-info">
-                            <span class="cc-stat-label">Registered Devices</span>
-                            <span class="cc-stat-value" id="deviceCount">--</span>
-                        </div>
-                    </div>
-                    <div class="cc-stat-card">
-                        <div class="cc-stat-icon"><i class="fas fa-bell"></i></div>
-                        <div class="cc-stat-info">
-                            <span class="cc-stat-label">Push Notifications</span>
-                            <span class="cc-stat-value" id="apnsStatus">Checking...</span>
-                        </div>
-                        <button class="btn btn-sm btn-icon" onclick="testPushNotification()" title="Send test push">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Registered Devices Panel -->
-                <div class="cc-panel">
-                    <div class="cc-panel-header">
-                        <h4><i class="fas fa-mobile-alt"></i> Registered Devices</h4>
-                        <div>
-                            <button class="btn btn-sm btn-secondary" onclick="loadDeviceList()" title="Refresh">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="resetAllDevices()" title="Reset All Devices">
-                                <i class="fas fa-trash-alt"></i> Reset All
-                            </button>
-                        </div>
-                    </div>
-                    <table class="cc-table">
-                        <thead>
-                            <tr>
-                                <th>Device Name</th>
-                                <th>Platform</th>
-                                <th>Token</th>
-                                <th>Last Seen</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="devicesTableBody">
-                            <tr><td colspan="6" style="text-align:center; opacity:0.5;">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-            {% endif %}
 
             <!-- Admin Section -->
             {% if user.is_admin %}
@@ -912,93 +790,19 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Active</label>
-                            <label class="switch" style="margin-top: 8px;">
-                                <input type="checkbox" id="flashSaleActive" checked>
-                                <span class="slider"></span>
-                            </label>
+                            <div class="toggle-with-label" style="margin-top: 8px;">
+                                <label class="switch">
+                                    <input type="checkbox" id="flashSaleActive" checked onchange="updateToggleLabel(this)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-status on" id="flashSaleActiveStatus">On</span>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeFlashSaleModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Push to App</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Pop-Up Location Modal -->
-    <div class="modal" id="popUpModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="popUpModalTitle"><i class="fas fa-map-marker-alt"></i> New Pop-Up Location</h3>
-                <button class="modal-close" onclick="closePopUpModal()">&times;</button>
-            </div>
-            <form id="popUpForm" onsubmit="savePopUpLocation(event)">
-                <input type="hidden" id="popUpId" value="">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label class="form-label">Event Name</label>
-                        <input type="text" id="popUpTitle" class="form-input" placeholder="Lauderdale by the Sea Market" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Location / Address</label>
-                        <div class="input-with-action">
-                            <input type="text" id="popUpLocation" class="form-input" placeholder="4500 El Mar Dr., Lauderdale-by-the-Sea" required>
-                            <button type="button" class="btn btn-sm btn-accent" onclick="geocodePopUpAddress()" title="Lookup coordinates from address">
-                                <i class="fas fa-search-location"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Latitude</label>
-                            <input type="number" id="popUpLatitude" class="form-input" step="any" placeholder="26.1901">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Longitude</label>
-                            <input type="number" id="popUpLongitude" class="form-input" step="any" placeholder="-80.0966">
-                        </div>
-                        <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">
-                            <button type="button" class="btn btn-sm btn-accent" onclick="reverseGeocodePopUp()" title="Lookup address from coordinates">
-                                <i class="fas fa-map-pin"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="geocode-status" id="geocodeStatus"></div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Start Date & Time</label>
-                            <input type="datetime-local" id="popUpDate" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">End Date & Time</label>
-                            <input type="datetime-local" id="popUpEndDate" class="form-input">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Icon (SF Symbol)</label>
-                            <select id="popUpIcon" class="form-input">
-                                <option value="leaf.fill">Leaf (Market)</option>
-                                <option value="storefront.fill">Storefront</option>
-                                <option value="cart.fill">Cart</option>
-                                <option value="mappin.circle.fill">Map Pin</option>
-                                <option value="star.fill">Star</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Active</label>
-                            <label class="switch" style="margin-top: 8px;">
-                                <input type="checkbox" id="popUpActive" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closePopUpModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Location</button>
                 </div>
             </form>
         </div>
@@ -1097,19 +901,36 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Active</label>
-                            <label class="switch" style="margin-top: 8px;">
-                                <input type="checkbox" id="eventActive" checked>
-                                <span class="slider"></span>
-                            </label>
+                            <div class="toggle-with-label" style="margin-top: 8px;">
+                                <label class="switch">
+                                    <input type="checkbox" id="eventActive" checked onchange="updateToggleLabel(this)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-status on">On</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Pop-Up Market</label>
+                            <div class="toggle-with-label" style="margin-top: 8px;">
+                                <label class="switch">
+                                    <input type="checkbox" id="eventPopup" checked onchange="updateToggleLabel(this)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-status on">On</span>
+                            </div>
+                            <small class="form-hint">On = Shows in app, Off = Calendar only</small>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Recurring</label>
-                            <label class="switch" style="margin-top: 8px;">
-                                <input type="checkbox" id="eventRecurring" onchange="toggleRecurrenceOptions()">
-                                <span class="slider"></span>
-                            </label>
+                            <div class="toggle-with-label" style="margin-top: 8px;">
+                                <label class="switch">
+                                    <input type="checkbox" id="eventRecurring" onchange="toggleRecurrenceOptions(); updateToggleLabel(this)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-status off">Off</span>
+                            </div>
                         </div>
                         <div class="form-group" id="recurrenceRuleGroup" style="display: none;">
                             <label class="form-label">Repeat</label>
@@ -1122,6 +943,19 @@
                         <div class="form-group" id="recurrenceEndGroup" style="display: none;">
                             <label class="form-label">Until</label>
                             <input type="datetime-local" id="eventRecurrenceEndDate" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Auto Notifications</label>
+                            <div class="toggle-with-label" style="margin-top: 8px;">
+                                <label class="switch">
+                                    <input type="checkbox" id="eventNotify" checked onchange="updateToggleLabel(this)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="toggle-status on">On</span>
+                            </div>
+                            <small class="form-hint">Sends reminders at 7AM day-of and 1 hour before</small>
                         </div>
                     </div>
                 </div>

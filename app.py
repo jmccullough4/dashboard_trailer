@@ -340,6 +340,12 @@ class DeviceToken(db.Model):
     device_name = db.Column(db.String(200))  # e.g. "John's iPhone 15"
     platform = db.Column(db.String(20), default='ios')
     apns_environment = db.Column(db.String(20), default='production')  # 'sandbox' or 'production'
+    # Extended device info
+    os_version = db.Column(db.String(50))  # e.g. "17.2", "14"
+    app_version = db.Column(db.String(50))  # e.g. "1.0.0"
+    device_model = db.Column(db.String(100))  # e.g. "iPhone15,2", "Pixel 9 Pro"
+    locale = db.Column(db.String(20))  # e.g. "en_US"
+    timezone = db.Column(db.String(50))  # e.g. "America/New_York"
     is_active = db.Column(db.Boolean, default=True)
     registered_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -365,7 +371,7 @@ class Announcement(db.Model):
 
 
 class Event(db.Model):
-    """Events for the mobile app"""
+    """Events for the mobile app and internal calendar"""
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
@@ -379,6 +385,10 @@ class Event(db.Model):
     recurrence_rule = db.Column(db.String(50))  # 'weekly', 'biweekly', 'monthly'
     recurrence_end_date = db.Column(db.DateTime)  # When to stop generating instances
     is_active = db.Column(db.Boolean, default=True)
+    is_popup = db.Column(db.Boolean, default=True)  # True = pop-up market (show in app), False = internal calendar only
+    notify = db.Column(db.Boolean, default=True)  # Send automated notifications
+    notified_morning = db.Column(db.Boolean, default=False)  # Has 7AM notification been sent
+    notified_hour_before = db.Column(db.Boolean, default=False)  # Has 1hr before notification been sent
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -397,6 +407,8 @@ class Event(db.Model):
             'recurrence_rule': self.recurrence_rule,
             'recurrence_end_date': self.recurrence_end_date.isoformat() if self.recurrence_end_date else None,
             'is_active': self.is_active,
+            'is_popup': self.is_popup if self.is_popup is not None else True,
+            'notify': self.notify if self.notify is not None else True,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -2577,8 +2589,14 @@ def public_catalog():
 
 @app.route('/api/public/events', methods=['GET'])
 def public_events():
-    """Return active events for the mobile app, expanding recurring events"""
-    events = Event.query.filter_by(is_active=True).order_by(Event.start_date.asc()).all()
+    """Return active pop-up events for the mobile app, expanding recurring events.
+
+    Only returns events where is_popup=True (pop-up markets visible to app users).
+    Internal calendar events (is_popup=False) are not returned.
+    Past events (where end_date or start_date has passed) are filtered out.
+    """
+    # Only return pop-up events (is_popup=True) that are active
+    events = Event.query.filter_by(is_active=True, is_popup=True).order_by(Event.start_date.asc()).all()
 
     # Expand recurring events into instances
     all_instances = []
@@ -2590,7 +2608,11 @@ def public_events():
             instances = event.get_recurring_instances(from_date=now, to_date=future_limit)
             all_instances.extend(instances)
         else:
-            all_instances.append(event.to_dict())
+            event_dict = event.to_dict()
+            # Filter out past events - use end_date if available, otherwise start_date
+            event_end = event.end_date if event.end_date else event.start_date
+            if event_end and event_end >= now:
+                all_instances.append(event_dict)
 
     # Sort by start_date
     all_instances.sort(key=lambda x: x['start_date'] if x['start_date'] else '')
@@ -2600,18 +2622,22 @@ def public_events():
 
 @app.route('/api/public/pop-up-sales', methods=['GET'])
 def public_pop_up_sales():
-    """Return upcoming pop-up sales for the mobile app (iOS field mapping)"""
-    events = PopUpLocation.query.filter_by(is_active=True).filter(
-        PopUpLocation.date >= datetime.utcnow()
-    ).order_by(PopUpLocation.date.asc()).all()
+    """Return upcoming pop-up sales for the mobile app (iOS field mapping).
+
+    DEPRECATED: Use /api/public/events instead. This endpoint now returns pop-up events.
+    """
+    # Only return pop-up events
+    events = Event.query.filter_by(is_active=True, is_popup=True).filter(
+        Event.start_date >= datetime.utcnow()
+    ).order_by(Event.start_date.asc()).all()
     return jsonify([{
         'id': e.id,
         'title': e.title,
-        'description': None,
+        'description': e.description,
         'address': e.location,
         'latitude': e.latitude or 0.0,
         'longitude': e.longitude or 0.0,
-        'starts_at': e.date.isoformat() if e.date else None,
+        'starts_at': e.start_date.isoformat() if e.start_date else None,
         'ends_at': e.end_date.isoformat() if e.end_date else None,
         'is_active': e.is_active,
     } for e in events])
@@ -2634,7 +2660,7 @@ def public_notifications():
     - since: ISO timestamp to get notifications after (optional)
     - limit: max number of notifications to return (default 20)
 
-    Returns a unified list of flash sales, pop-ups, announcements, and events
+    Returns a unified list of flash sales, announcements, and events
     created/updated since the given timestamp, sorted by date descending.
     """
     since_str = request.args.get('since')
@@ -2664,21 +2690,6 @@ def public_notifications():
             'data': sale.to_dict()
         })
 
-    # Get recent pop-up locations
-    popup_query = PopUpLocation.query.filter_by(is_active=True)
-    if since:
-        popup_query = popup_query.filter(PopUpLocation.created_at > since)
-    for loc in popup_query.order_by(PopUpLocation.created_at.desc()).limit(limit).all():
-        date_str = loc.date.strftime('%b %d') if loc.date else ''
-        notifications.append({
-            'id': f'popup_{loc.id}',
-            'type': 'popup',
-            'title': '3 Strands is Coming to You!',
-            'body': f"{loc.title} — {date_str} at {loc.location}",
-            'created_at': loc.created_at.isoformat() if loc.created_at else None,
-            'data': loc.to_dict()
-        })
-
     # Get recent announcements
     ann_query = Announcement.query.filter_by(is_active=True)
     if since:
@@ -2693,8 +2704,8 @@ def public_notifications():
             'data': ann.to_dict()
         })
 
-    # Get recent events
-    event_query = Event.query.filter_by(is_active=True)
+    # Get recent pop-up events (only is_popup=True events go to mobile app)
+    event_query = Event.query.filter_by(is_active=True, is_popup=True)
     if since:
         event_query = event_query.filter(Event.created_at > since)
     for event in event_query.order_by(Event.created_at.desc()).limit(limit).all():
@@ -2702,7 +2713,7 @@ def public_notifications():
         notifications.append({
             'id': f'event_{event.id}',
             'type': 'event',
-            'title': '3 Strands Event!',
+            'title': '3 Strands Pop-Up Market!',
             'body': f"{event.title} — {date_str}",
             'created_at': event.created_at.isoformat() if event.created_at else None,
             'data': event.to_dict()
@@ -2731,6 +2742,30 @@ def public_register_device():
     device_name = data.get('device_name', '')
     # iOS app should send 'sandbox' for debug builds, 'production' for release/TestFlight
     apns_environment = data.get('apns_environment', 'production')
+    # Extended device info
+    os_version = data.get('os_version', '')
+    app_version = data.get('app_version', '')
+    device_model = data.get('device_model', '')
+    locale = data.get('locale', '')
+    timezone = data.get('timezone', '')
+
+    def update_device_info(device):
+        """Update device with latest info"""
+        device.last_seen = datetime.utcnow()
+        device.is_active = True
+        device.apns_environment = apns_environment
+        if device_name:
+            device.device_name = device_name
+        if os_version:
+            device.os_version = os_version
+        if app_version:
+            device.app_version = app_version
+        if device_model:
+            device.device_model = device_model
+        if locale:
+            device.locale = locale
+        if timezone:
+            device.timezone = timezone
 
     try:
         # If device_id provided, find by device_id first (handles token changes)
@@ -2754,28 +2789,31 @@ def public_register_device():
                     db.session.delete(dupe)
 
                 existing.token = token
-                existing.last_seen = datetime.utcnow()
-                existing.is_active = True
-                existing.apns_environment = apns_environment
-                if device_name:
-                    existing.device_name = device_name
+                update_device_info(existing)
                 db.session.commit()
                 return jsonify({'success': True, 'status': 'updated'})
 
         # Fall back to finding by token
         existing = DeviceToken.query.filter_by(token=token).first()
         if existing:
-            existing.last_seen = datetime.utcnow()
-            existing.is_active = True
-            existing.apns_environment = apns_environment
             if device_id and not existing.device_id:
                 existing.device_id = device_id
-            if device_name:
-                existing.device_name = device_name
+            update_device_info(existing)
             db.session.commit()
             return jsonify({'success': True, 'status': 'updated'})
 
-        device = DeviceToken(token=token, platform=platform, device_id=device_id, device_name=device_name, apns_environment=apns_environment)
+        device = DeviceToken(
+            token=token,
+            platform=platform,
+            device_id=device_id,
+            device_name=device_name,
+            apns_environment=apns_environment,
+            os_version=os_version,
+            app_version=app_version,
+            device_model=device_model,
+            locale=locale,
+            timezone=timezone
+        )
         db.session.add(device)
         db.session.commit()
         return jsonify({'success': True, 'status': 'registered'})
@@ -2868,84 +2906,6 @@ def delete_flash_sale(sale_id):
     return jsonify({'success': True})
 
 
-# =============================================================================
-# Admin: Pop-Up Locations Management
-# =============================================================================
-
-@app.route('/api/popup-locations', methods=['GET'])
-@login_required
-def get_popup_locations():
-    """Get all pop-up locations"""
-    locations = PopUpLocation.query.order_by(PopUpLocation.date.desc()).all()
-    return jsonify([l.to_dict() for l in locations])
-
-
-@app.route('/api/popup-locations', methods=['POST'])
-@login_required
-def create_popup_location():
-    """Create or update a pop-up location"""
-    if not current_user.is_admin:
-        return jsonify({'error': 'Admin required'}), 403
-
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-
-    loc_id = data.get('id')
-    if loc_id:
-        loc = PopUpLocation.query.get(loc_id)
-        if not loc:
-            return jsonify({'error': 'Location not found'}), 404
-    else:
-        loc = PopUpLocation()
-        db.session.add(loc)
-
-    loc.title = data.get('title', loc.title if loc_id else 'Pop-Up Location')
-    loc.location = data.get('location', loc.location if loc_id else '')
-    if data.get('latitude') is not None:
-        loc.latitude = float(data['latitude']) if data['latitude'] != '' else None
-    if data.get('longitude') is not None:
-        loc.longitude = float(data['longitude']) if data['longitude'] != '' else None
-    loc.icon = data.get('icon', 'leaf.fill')
-    loc.is_recurring = data.get('is_recurring', False)
-    loc.recurrence_rule = data.get('recurrence_rule', '')
-    loc.is_active = data.get('is_active', True)
-
-    if data.get('date'):
-        loc.date = datetime.fromisoformat(data['date'].replace('Z', '+00:00').replace('+00:00', ''))
-    if data.get('end_date'):
-        loc.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00').replace('+00:00', ''))
-
-    db.session.commit()
-
-    # Send push notification for active locations
-    push_result = None
-    if loc.is_active:
-        date_str = loc.date.strftime('%b %d') if loc.date else ''
-        action = "New" if not loc_id else "Updated"
-        push_result = send_all_push_notifications(
-            f"3 Strands is Coming to You!",
-            f"{action}: {loc.title} — {date_str} at {loc.location}"
-        )
-        print(f"Pop-up push result: {push_result}")
-
-    return jsonify({'success': True, 'location': loc.to_dict(), 'push_result': push_result})
-
-
-@app.route('/api/popup-locations/<int:loc_id>', methods=['DELETE'])
-@login_required
-def delete_popup_location(loc_id):
-    """Delete a pop-up location"""
-    if not current_user.is_admin:
-        return jsonify({'error': 'Admin required'}), 403
-
-    loc = PopUpLocation.query.get(loc_id)
-    if not loc:
-        return jsonify({'error': 'Location not found'}), 404
-
-    db.session.delete(loc)
-    db.session.commit()
-    return jsonify({'success': True})
 
 
 # =============================================================================
@@ -3063,8 +3023,14 @@ def create_or_update_event():
     event.location = data.get('location', '')
     event.icon = data.get('icon', 'leaf.fill')
     event.is_active = data.get('is_active', True)
+    event.is_popup = data.get('is_popup', True)  # True = pop-up market (visible in app), False = calendar only
+    event.notify = data.get('notify', True)
     event.is_recurring = data.get('is_recurring', False)
     event.recurrence_rule = data.get('recurrence_rule', '') if data.get('is_recurring') else None
+    # Reset notification flags if date changed
+    if data.get('start_date'):
+        event.notified_morning = False
+        event.notified_hour_before = False
 
     if data.get('latitude'):
         event.latitude = float(data['latitude'])
@@ -3082,12 +3048,12 @@ def create_or_update_event():
 
     db.session.commit()
 
-    # Send push notification for new active events
+    # Send push notification for new active pop-up events only
     push_result = None
-    if not event_id and event.is_active:
+    if not event_id and event.is_active and event.is_popup:
         date_str = event.start_date.strftime('%b %d') if event.start_date else ''
         push_result = send_all_push_notifications(
-            "3 Strands Event!",
+            "3 Strands Pop-Up Market!",
             f"{event.title} — {date_str}"
         )
         print(f"Event push result: {push_result}")
@@ -3109,6 +3075,112 @@ def delete_event(event_id):
     db.session.delete(event)
     db.session.commit()
     return jsonify({'success': True})
+
+
+# =============================================================================
+# Automated Event Notifications
+# =============================================================================
+
+def check_and_send_event_notifications():
+    """Check for events that need notifications and send them.
+
+    Called periodically (e.g., every 5 minutes).
+    Sends notifications:
+    - At 7:00 AM Eastern on the day of the event
+    - 1 hour before the event start time
+
+    Uses Eastern timezone (America/New_York) for 7AM check.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+
+    eastern = ZoneInfo('America/New_York')
+    now_utc = datetime.utcnow()
+    now_eastern = datetime.now(eastern)
+
+    # Get all active events with notifications enabled that haven't ended yet
+    events = Event.query.filter(
+        Event.is_active == True,
+        Event.notify == True,
+        Event.start_date >= now_utc - timedelta(hours=1)  # Include events that just started
+    ).all()
+
+    notifications_sent = []
+
+    for event in events:
+        # Convert event start to Eastern for day comparison
+        event_start_eastern = event.start_date.replace(tzinfo=ZoneInfo('UTC')).astimezone(eastern)
+
+        # Check for 7AM morning notification (same day, after 7AM, not yet sent)
+        if not event.notified_morning:
+            # Is today the event day?
+            if event_start_eastern.date() == now_eastern.date():
+                # Is it after 7AM Eastern?
+                if now_eastern.hour >= 7:
+                    # Send morning notification
+                    date_str = event_start_eastern.strftime('%I:%M %p')
+                    location_str = f" at {event.location}" if event.location else ""
+                    result = send_all_push_notifications(
+                        f"Today: {event.title}",
+                        f"Join us today at {date_str}{location_str}!"
+                    )
+                    event.notified_morning = True
+                    notifications_sent.append(f"Morning: {event.title}")
+                    print(f"Sent morning notification for event {event.id}: {event.title}")
+
+        # Check for 1-hour before notification
+        if not event.notified_hour_before:
+            # Is event starting within the next hour?
+            time_until_start = (event.start_date - now_utc).total_seconds()
+            if 0 < time_until_start <= 3600:  # Within 1 hour
+                # Send 1-hour reminder
+                location_str = f" at {event.location}" if event.location else ""
+                result = send_all_push_notifications(
+                    f"Starting Soon: {event.title}",
+                    f"We're setting up now{location_str}. See you in about an hour!"
+                )
+                event.notified_hour_before = True
+                notifications_sent.append(f"1hr before: {event.title}")
+                print(f"Sent 1-hour reminder for event {event.id}: {event.title}")
+
+    if notifications_sent:
+        db.session.commit()
+
+    return notifications_sent
+
+
+@app.route('/api/check-event-notifications', methods=['POST'])
+def check_event_notifications():
+    """Endpoint to trigger event notification check.
+
+    Can be called by a cron job or external scheduler.
+    No authentication required - it only reads events and sends notifications.
+    """
+    sent = check_and_send_event_notifications()
+    return jsonify({'success': True, 'notifications_sent': sent})
+
+
+# Background notification checker - runs periodically when server is accessed
+_last_notification_check = None
+
+@app.before_request
+def maybe_check_notifications():
+    """Periodically check for event notifications (every 5 minutes)."""
+    global _last_notification_check
+
+    # Only check on certain routes to avoid overhead
+    if request.endpoint not in ['dashboard', 'index', 'get_events', 'public_events']:
+        return
+
+    now = datetime.utcnow()
+    if _last_notification_check is None or (now - _last_notification_check).total_seconds() > 300:
+        _last_notification_check = now
+        try:
+            check_and_send_event_notifications()
+        except Exception as e:
+            print(f"Error checking event notifications: {e}")
 
 
 # =============================================================================
@@ -3241,7 +3313,7 @@ def test_push_notification():
 
     result = send_all_push_notifications(
         "3 Strands Test",
-        "Push notifications are working! You'll receive alerts for flash sales and pop-up locations."
+        "Push notifications are working! You'll receive alerts for flash sales and events."
     )
     return jsonify({'success': result.get('total_sent', 0) > 0, **result})
 
@@ -3253,12 +3325,17 @@ def get_registered_devices():
     if not current_user.is_admin:
         return jsonify({'error': 'Admin required'}), 403
 
-    devices = DeviceToken.query.order_by(DeviceToken.registered_at.desc()).all()
+    devices = DeviceToken.query.order_by(DeviceToken.last_seen.desc()).all()
     return jsonify([{
         'id': d.id,
         'device_id': d.device_id or '',
         'device_name': d.device_name or '',
         'platform': d.platform,
+        'os_version': d.os_version or '',
+        'app_version': d.app_version or '',
+        'device_model': d.device_model or '',
+        'locale': d.locale or '',
+        'timezone': d.timezone or '',
         'is_active': d.is_active,
         'registered_at': d.registered_at.isoformat() if d.registered_at else None,
         'last_seen': d.last_seen.isoformat() if d.last_seen else None,
@@ -3321,25 +3398,6 @@ def migrate_db():
                         db.session.rollback()
                         print(f"Could not add column '{col_name}': {e}")
 
-        # Migrate pop_up_location table
-        if 'pop_up_location' in inspector.get_table_names():
-            existing_columns = [col['name'] for col in inspector.get_columns('pop_up_location')]
-
-            columns_to_add = {
-                'latitude': 'FLOAT',
-                'longitude': 'FLOAT'
-            }
-
-            for col_name, col_type in columns_to_add.items():
-                if col_name not in existing_columns:
-                    try:
-                        db.session.execute(text(f'ALTER TABLE pop_up_location ADD COLUMN {col_name} {col_type}'))
-                        db.session.commit()
-                        print(f"Added column '{col_name}' to pop_up_location table")
-                    except Exception as e:
-                        db.session.rollback()
-                        print(f"Could not add column '{col_name}': {e}")
-
         # Migrate device_token table
         if 'device_token' in inspector.get_table_names():
             existing_columns = [col['name'] for col in inspector.get_columns('device_token')]
@@ -3347,7 +3405,12 @@ def migrate_db():
             columns_to_add = {
                 'device_id': 'VARCHAR(100)',
                 'device_name': 'VARCHAR(200)',
-                'apns_environment': 'VARCHAR(20)'
+                'apns_environment': 'VARCHAR(20)',
+                'os_version': 'VARCHAR(50)',
+                'app_version': 'VARCHAR(50)',
+                'device_model': 'VARCHAR(100)',
+                'locale': 'VARCHAR(20)',
+                'timezone': 'VARCHAR(50)'
             }
 
             for col_name, col_type in columns_to_add.items():
@@ -3360,14 +3423,18 @@ def migrate_db():
                         db.session.rollback()
                         print(f"Could not add column '{col_name}': {e}")
 
-        # Migrate event table for recurrence fields
+        # Migrate event table for recurrence and notification fields
         if 'event' in inspector.get_table_names():
             existing_columns = [col['name'] for col in inspector.get_columns('event')]
 
             columns_to_add = {
                 'is_recurring': 'BOOLEAN',
                 'recurrence_rule': 'VARCHAR(50)',
-                'recurrence_end_date': 'DATETIME'
+                'recurrence_end_date': 'DATETIME',
+                'is_popup': 'BOOLEAN DEFAULT 1',
+                'notify': 'BOOLEAN DEFAULT 1',
+                'notified_morning': 'BOOLEAN DEFAULT 0',
+                'notified_hour_before': 'BOOLEAN DEFAULT 0'
             }
 
             for col_name, col_type in columns_to_add.items():
@@ -3407,36 +3474,6 @@ def init_db():
             db.session.commit()
             print("Seeded Square API configuration")
 
-        # Seed example events if none exist
-        if not Event.query.first():
-            events = [
-                Event(
-                    title='Lauderdale by the Sea Market',
-                    description='Weekly farmers market featuring local produce and artisan goods',
-                    location='4500 El Mar Dr., Lauderdale-by-the-Sea, FL',
-                    latitude=26.1934,
-                    longitude=-80.0962,
-                    start_date=datetime.utcnow() + timedelta(days=7),
-                    end_date=datetime.utcnow() + timedelta(days=7, hours=4),
-                    icon='leaf.fill',
-                    is_active=True
-                ),
-                Event(
-                    title='Olive Branch Market',
-                    description='Fresh local produce and handmade crafts',
-                    location='3750 NE Indian River Dr., Jensen Beach, FL',
-                    latitude=27.2506,
-                    longitude=-80.2289,
-                    start_date=datetime.utcnow() + timedelta(days=14),
-                    end_date=datetime.utcnow() + timedelta(days=14, hours=4),
-                    icon='leaf.fill',
-                    is_active=True
-                )
-            ]
-            for event in events:
-                db.session.add(event)
-            db.session.commit()
-            print("Seeded example events")
 
 
 # =============================================================================

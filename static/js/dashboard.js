@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
     startAutoRefresh();
     loadVersion();
 
+
     // Form handlers
     document.getElementById('taskForm').addEventListener('submit', handleTaskSubmit);
     document.getElementById('registerForm').addEventListener('submit', handleRegisterSubmit);
@@ -46,6 +47,7 @@ function initTempToggle() {
     const toggle = document.getElementById('tempUnitToggle');
     if (toggle) {
         toggle.checked = useCelsius;
+        updateTempToggleLabels();
     }
 }
 
@@ -54,6 +56,7 @@ function toggleTempUnit() {
     const toggle = document.getElementById('tempUnitToggle');
     useCelsius = toggle.checked;
     localStorage.setItem('tempUnit', useCelsius ? 'C' : 'F');
+    updateTempToggleLabels();
     // Re-render sensors with new unit
     if (allSensors.length > 0) {
         renderSensors(allSensors);
@@ -62,6 +65,26 @@ function toggleTempUnit() {
     // Re-render EcoFlow display with new unit
     if (ecoflowDevices.length > 0) {
         renderPowerStationCards(ecoflowDevices);
+    }
+}
+
+// Update F/C toggle label highlighting
+function updateTempToggleLabels() {
+    const labelF = document.getElementById('labelF');
+    const labelC = document.getElementById('labelC');
+    if (labelF && labelC) {
+        labelF.classList.toggle('active', !useCelsius);
+        labelC.classList.toggle('active', useCelsius);
+    }
+}
+
+// Update toggle label (On/Off) for any toggle
+function updateToggleLabel(checkbox) {
+    const statusEl = checkbox.closest('.toggle-with-label')?.querySelector('.toggle-status');
+    if (statusEl) {
+        statusEl.textContent = checkbox.checked ? 'On' : 'Off';
+        statusEl.classList.toggle('on', checkbox.checked);
+        statusEl.classList.toggle('off', !checkbox.checked);
     }
 }
 
@@ -128,7 +151,6 @@ function initNavigation() {
             // Lazy-load App C² data
             if (section === 'appcontrol') {
                 loadFlashSales();
-                loadPopUpLocations();
                 loadAnnouncements();
                 loadEvents();
                 loadAppControlStats();
@@ -1611,6 +1633,85 @@ function renderPowerStationCards(devices) {
     }
 }
 
+function buildEcoFlowStatsHtml(device, battTempDisplay) {
+    // Build array of stats that have actual data
+    const stats = [];
+
+    // Check each stat and only add if it has a real value
+    if (device.battery_temp !== null && device.battery_temp !== undefined) {
+        stats.push({
+            icon: 'fa-thermometer-half',
+            value: battTempDisplay,
+            label: 'Batt Temp'
+        });
+    }
+
+    if (device.fast_charge_watts && device.fast_charge_watts > 0) {
+        stats.push({
+            icon: 'fa-bolt',
+            value: device.fast_charge_watts + 'W',
+            label: 'Max Input'
+        });
+    }
+
+    if (device.backup_reserve && device.backup_reserve > 0) {
+        stats.push({
+            icon: 'fa-shield-alt',
+            value: device.backup_reserve + '%',
+            label: 'Reserve'
+        });
+    }
+
+    if (device.cycles !== undefined && device.cycles !== null && device.cycles > 0) {
+        stats.push({
+            icon: 'fa-sync-alt',
+            value: device.cycles,
+            label: 'Cycles'
+        });
+    }
+
+    if (device.soh !== undefined && device.soh !== null && device.soh > 0 && device.soh < 100) {
+        // Only show if it's not the default 100%
+        stats.push({
+            icon: 'fa-heart',
+            value: device.soh + '%',
+            label: 'Health'
+        });
+    }
+
+    if (device.ac_output_watts && device.ac_output_watts > 0) {
+        stats.push({
+            icon: 'fa-plug',
+            value: device.ac_output_watts + 'W',
+            label: 'AC Out'
+        });
+    }
+
+    // If no stats have data, return empty
+    if (stats.length === 0) {
+        return '';
+    }
+
+    // Build HTML in rows of 3
+    let html = '';
+    for (let i = 0; i < stats.length; i += 3) {
+        const rowStats = stats.slice(i, i + 3);
+        html += '<div class="compact-stats">';
+        rowStats.forEach(stat => {
+            html += `
+                <div class="compact-stat">
+                    <i class="fas ${stat.icon}"></i>
+                    <span class="stat-value">${stat.value}</span>
+                    <span class="stat-label">${stat.label}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+
+    return html;
+}
+
 function createPowerStationCard(device) {
     const card = document.createElement('div');
     card.className = 'power-station-card';
@@ -1673,97 +1774,56 @@ function createPowerStationCard(device) {
         return card;
     }
 
+    // Build inline stats for the power row
+    const inlineStats = [];
+    if (device.solar_in_watts > 0) {
+        inlineStats.push(`<span class="power-stat solar"><i class="fas fa-sun"></i> ${device.solar_in_watts}W</span>`);
+    }
+    if (device.battery_temp !== null && device.battery_temp !== undefined) {
+        inlineStats.push(`<span class="power-stat temp"><i class="fas fa-thermometer-half"></i> ${battTempDisplay}</span>`);
+    }
+    if (device.cycles !== undefined && device.cycles !== null && device.cycles > 0) {
+        inlineStats.push(`<span class="power-stat"><i class="fas fa-sync-alt"></i> ${device.cycles} cycles</span>`);
+    }
+
     card.innerHTML = `
-        <div class="power-card-header">
-            <div class="power-card-title">
+        <div class="power-card-header-compact">
+            <div class="power-card-name">
                 <i class="fas fa-car-battery"></i>
                 <span>${escapeHtml(device.device_name || 'Power Station')}</span>
             </div>
-            <div class="power-card-status">
-                <span class="ecoflow-status ${isOnline ? 'online' : 'offline'}">${isOnline ? 'Online' : 'Offline'}</span>
+            <div class="power-card-battery">
+                <div class="mini-battery-bar">
+                    <div class="mini-battery-level" style="width: ${soc}%; background: ${batteryGradient}"></div>
+                </div>
+                <span class="mini-battery-pct">${soc}%</span>
+            </div>
+            <div class="power-card-actions">
                 ${currentUser.isAdmin ? `
                     <button class="btn btn-sm btn-icon" onclick="showEcoFlowConfigModal(${device.id})" title="Configure">
                         <i class="fas fa-cog"></i>
-                    </button>
-                    <button class="btn btn-sm btn-icon btn-danger-icon" onclick="removeEcoFlowDevice(${device.id})" title="Remove">
-                        <i class="fas fa-trash"></i>
                     </button>
                 ` : ''}
             </div>
         </div>
 
-        <!-- Battery gauge -->
-        <div class="compact-battery-gauge">
-            <div class="battery-level" style="width: ${soc}%; background: ${batteryGradient}"></div>
-            <div class="battery-percentage">${soc}%</div>
-        </div>
-        <div class="battery-state-row">
-            <span class="ecoflow-state ${stateClass}">
-                <i class="fas ${stateIcon}"></i> ${stateText}
-            </span>
-            <span class="ecoflow-time">${device.remain_time_display || '--'}</span>
-        </div>
-
-        <!-- Power flow -->
-        <div class="compact-power-flow">
-            <div class="power-in">
+        <div class="power-card-flow">
+            <div class="flow-item in">
                 <i class="fas fa-arrow-down"></i>
                 <span>${device.watts_in || 0}W</span>
-                <small>In</small>
             </div>
-            <div class="power-battery-icon">
-                <i class="fas ${battIconClass} ${device.state === 'charging' ? 'charging' : ''}"></i>
+            <div class="flow-state ${stateClass}">
+                <i class="fas ${stateIcon}"></i>
+                <span>${stateText}</span>
+                ${device.remain_time_display && device.remain_time_display !== 'Calculating...' ? `<small>${device.remain_time_display}</small>` : ''}
             </div>
-            <div class="power-out">
+            <div class="flow-item out">
                 <i class="fas fa-arrow-up"></i>
                 <span>${device.watts_out || 0}W</span>
-                <small>Out</small>
             </div>
         </div>
 
-        ${device.solar_in_watts > 0 ? `
-            <div class="solar-input">
-                <i class="fas fa-sun"></i> Solar: <span>${device.solar_in_watts}W</span>
-            </div>
-        ` : ''}
-
-        <!-- Stats Row 1 -->
-        <div class="compact-stats">
-            <div class="compact-stat">
-                <i class="fas fa-thermometer-half"></i>
-                <span class="stat-value">${battTempDisplay}</span>
-                <span class="stat-label">Batt Temp</span>
-            </div>
-            <div class="compact-stat">
-                <i class="fas fa-bolt"></i>
-                <span class="stat-value">${device.fast_charge_watts ? device.fast_charge_watts + 'W' : '--'}</span>
-                <span class="stat-label">Max Input</span>
-            </div>
-            <div class="compact-stat">
-                <i class="fas fa-shield-alt"></i>
-                <span class="stat-value">${device.backup_reserve ? device.backup_reserve + '%' : '--'}</span>
-                <span class="stat-label">Reserve</span>
-            </div>
-        </div>
-
-        <!-- Stats Row 2 -->
-        <div class="compact-stats">
-            <div class="compact-stat">
-                <i class="fas fa-sync-alt"></i>
-                <span class="stat-value">${device.cycles !== undefined ? device.cycles : '--'}</span>
-                <span class="stat-label">Cycles</span>
-            </div>
-            <div class="compact-stat">
-                <i class="fas fa-heart"></i>
-                <span class="stat-value">${device.soh !== undefined ? device.soh + '%' : '--'}</span>
-                <span class="stat-label">Health</span>
-            </div>
-            <div class="compact-stat">
-                <i class="fas fa-plug"></i>
-                <span class="stat-value">${device.ac_output_watts ? device.ac_output_watts + 'W' : '--'}</span>
-                <span class="stat-label">AC Out</span>
-            </div>
-        </div>
+        ${inlineStats.length > 0 ? `<div class="power-card-stats">${inlineStats.join('')}</div>` : ''}
     `;
 
     return card;
@@ -2055,37 +2115,27 @@ async function loadFlashSales() {
 }
 
 function renderFlashSalesTable(sales) {
-    const tbody = document.getElementById('flashSalesTableBody');
-    const empty = document.getElementById('flashSalesEmpty');
-    if (!tbody) return;
-
-    if (sales.length === 0) {
-        tbody.innerHTML = '';
-        if (empty) empty.style.display = 'flex';
-        return;
+    // Render mini version for compact panel
+    const miniContainer = document.getElementById('flashSalesMini');
+    if (miniContainer) {
+        if (sales.length === 0) {
+            miniContainer.innerHTML = '<div class="mini-empty"><i class="fas fa-tags"></i>No flash sales</div>';
+        } else {
+            miniContainer.innerHTML = sales.slice(0, 5).map(sale => {
+                const isExpired = new Date(sale.expires_at) < new Date();
+                const statusClass = !sale.is_active ? 'inactive' : isExpired ? 'inactive' : 'active';
+                const discount = sale.original_price > 0 ? Math.round(((sale.original_price - sale.sale_price) / sale.original_price) * 100) : 0;
+                return `<div class="mini-item">
+                    <span class="mini-item-title">${escapeHtml(sale.title)}</span>
+                    <span class="mini-status ${statusClass}">-${discount}%</span>
+                    <div class="mini-item-actions">
+                        <button class="edit" onclick="editFlashSale(${sale.id})"><i class="fas fa-edit"></i></button>
+                        <button class="delete" onclick="deleteFlashSale(${sale.id})"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
     }
-    if (empty) empty.style.display = 'none';
-
-    tbody.innerHTML = sales.map(sale => {
-        const expires = new Date(sale.expires_at);
-        const isExpired = expires < new Date();
-        const statusClass = !sale.is_active ? 'inactive' : isExpired ? 'expired' : 'active';
-        const statusText = !sale.is_active ? 'Inactive' : isExpired ? 'Expired' : 'Live';
-        const discount = sale.original_price > 0 ? Math.round(((sale.original_price - sale.sale_price) / sale.original_price) * 100) : 0;
-
-        return `<tr>
-            <td><strong>${escapeHtml(sale.title)}</strong></td>
-            <td>${escapeHtml(sale.cut_type)}</td>
-            <td>$${sale.original_price.toFixed(2)}</td>
-            <td><span class="sale-price-badge">$${sale.sale_price.toFixed(2)} <small>(-${discount}%)</small></span></td>
-            <td>${expires.toLocaleDateString()} ${expires.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
-            <td>
-                <button class="btn btn-sm btn-icon" onclick="editFlashSale(${sale.id})" title="Edit"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deleteFlashSale(${sale.id})" title="Delete"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    }).join('');
 }
 
 function showFlashSaleModal(saleId = null) {
@@ -2193,219 +2243,6 @@ async function deleteFlashSale(saleId) {
 }
 
 // =============================================================================
-// App C² - Pop-Up Locations
-// =============================================================================
-
-async function loadPopUpLocations() {
-    try {
-        const response = await fetch('/api/popup-locations');
-        const locations = await response.json();
-        renderPopUpTable(locations);
-    } catch (error) {
-        console.error('Error loading pop-up locations:', error);
-    }
-}
-
-function renderPopUpTable(locations) {
-    const tbody = document.getElementById('popUpTableBody');
-    const empty = document.getElementById('popUpEmpty');
-    if (!tbody) return;
-
-    if (locations.length === 0) {
-        tbody.innerHTML = '';
-        if (empty) empty.style.display = 'flex';
-        return;
-    }
-    if (empty) empty.style.display = 'none';
-
-    tbody.innerHTML = locations.map(loc => {
-        const date = new Date(loc.date);
-        const endDate = loc.end_date ? new Date(loc.end_date) : null;
-        const isPast = date < new Date();
-        const statusClass = !loc.is_active ? 'inactive' : isPast ? 'expired' : 'active';
-        const statusText = !loc.is_active ? 'Inactive' : isPast ? 'Past' : 'Upcoming';
-        const timeStr = endDate
-            ? `${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
-            : date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
-        const hasCoords = loc.latitude && loc.longitude;
-        const coordsStr = hasCoords
-            ? `<a href="https://maps.google.com/?q=${loc.latitude},${loc.longitude}" target="_blank" class="coords-link" title="Open in Google Maps">${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}</a>`
-            : '<span class="text-muted">--</span>';
-
-        return `<tr>
-            <td><strong>${escapeHtml(loc.title)}</strong></td>
-            <td>${escapeHtml(loc.location)}</td>
-            <td>${coordsStr}</td>
-            <td>${date.toLocaleDateString()}</td>
-            <td>${timeStr}</td>
-            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
-            <td>
-                <button class="btn btn-sm btn-icon" onclick="editPopUpLocation(${loc.id})" title="Edit"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deletePopUpLocation(${loc.id})" title="Delete"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    }).join('');
-}
-
-function showPopUpModal(locId = null) {
-    document.getElementById('popUpId').value = '';
-    document.getElementById('popUpTitle').value = '';
-    document.getElementById('popUpLocation').value = '';
-    document.getElementById('popUpLatitude').value = '';
-    document.getElementById('popUpLongitude').value = '';
-    document.getElementById('popUpIcon').value = 'leaf.fill';
-    document.getElementById('popUpActive').checked = true;
-    document.getElementById('popUpDate').value = '';
-    document.getElementById('popUpEndDate').value = '';
-    clearGeocodeStatus();
-
-    document.getElementById('popUpModalTitle').innerHTML = '<i class="fas fa-map-marker-alt"></i> New Pop-Up Location';
-    document.getElementById('popUpModal').classList.add('show');
-}
-
-function closePopUpModal() {
-    document.getElementById('popUpModal').classList.remove('show');
-}
-
-async function editPopUpLocation(locId) {
-    try {
-        const response = await fetch('/api/popup-locations');
-        const locations = await response.json();
-        const loc = locations.find(l => l.id === locId);
-        if (!loc) return;
-
-        document.getElementById('popUpId').value = loc.id;
-        document.getElementById('popUpTitle').value = loc.title;
-        document.getElementById('popUpLocation').value = loc.location;
-        document.getElementById('popUpLatitude').value = loc.latitude || '';
-        document.getElementById('popUpLongitude').value = loc.longitude || '';
-        document.getElementById('popUpIcon').value = loc.icon;
-        document.getElementById('popUpActive').checked = loc.is_active;
-        clearGeocodeStatus();
-
-        if (loc.date) document.getElementById('popUpDate').value = toLocalISOString(new Date(loc.date));
-        if (loc.end_date) document.getElementById('popUpEndDate').value = toLocalISOString(new Date(loc.end_date));
-
-        document.getElementById('popUpModalTitle').innerHTML = '<i class="fas fa-map-marker-alt"></i> Edit Pop-Up Location';
-        document.getElementById('popUpModal').classList.add('show');
-    } catch (error) {
-        showToast('Error loading location details', 'error');
-    }
-}
-
-async function geocodePopUpAddress() {
-    const address = document.getElementById('popUpLocation').value.trim();
-    if (!address) { showToast('Enter an address first', 'error'); return; }
-
-    setGeocodeStatus('Looking up coordinates...', 'loading');
-    try {
-        const response = await fetch('/api/geocode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address })
-        });
-        const data = await response.json();
-        if (data.success) {
-            document.getElementById('popUpLatitude').value = data.latitude.toFixed(6);
-            document.getElementById('popUpLongitude').value = data.longitude.toFixed(6);
-            setGeocodeStatus(`Found: ${data.display_name}`, 'success');
-        } else {
-            setGeocodeStatus(data.error || 'Address not found', 'error');
-        }
-    } catch (error) {
-        setGeocodeStatus('Geocode request failed', 'error');
-    }
-}
-
-async function reverseGeocodePopUp() {
-    const lat = document.getElementById('popUpLatitude').value;
-    const lng = document.getElementById('popUpLongitude').value;
-    if (!lat || !lng) { showToast('Enter lat/lng first', 'error'); return; }
-
-    setGeocodeStatus('Looking up address...', 'loading');
-    try {
-        const response = await fetch('/api/reverse-geocode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ latitude: parseFloat(lat), longitude: parseFloat(lng) })
-        });
-        const data = await response.json();
-        if (data.success) {
-            document.getElementById('popUpLocation').value = data.address;
-            setGeocodeStatus('Address found from coordinates', 'success');
-        } else {
-            setGeocodeStatus(data.error || 'Location not found', 'error');
-        }
-    } catch (error) {
-        setGeocodeStatus('Reverse geocode failed', 'error');
-    }
-}
-
-function setGeocodeStatus(msg, type) {
-    const el = document.getElementById('geocodeStatus');
-    if (!el) return;
-    el.textContent = msg;
-    el.className = 'geocode-status ' + type;
-    el.style.display = 'block';
-}
-
-function clearGeocodeStatus() {
-    const el = document.getElementById('geocodeStatus');
-    if (el) { el.textContent = ''; el.style.display = 'none'; }
-}
-
-async function savePopUpLocation(event) {
-    event.preventDefault();
-    const locId = document.getElementById('popUpId').value;
-    const data = {
-        title: document.getElementById('popUpTitle').value,
-        location: document.getElementById('popUpLocation').value,
-        latitude: document.getElementById('popUpLatitude').value || null,
-        longitude: document.getElementById('popUpLongitude').value || null,
-        date: document.getElementById('popUpDate').value,
-        end_date: document.getElementById('popUpEndDate').value || null,
-        icon: document.getElementById('popUpIcon').value,
-        is_active: document.getElementById('popUpActive').checked
-    };
-    if (locId) data.id = parseInt(locId);
-
-    try {
-        const response = await fetch('/api/popup-locations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        if (result.success) {
-            showToast(locId ? 'Location updated' : 'Location added');
-            closePopUpModal();
-            loadPopUpLocations();
-        } else {
-            showToast(result.error || 'Failed to save', 'error');
-        }
-    } catch (error) {
-        showToast('Error saving location', 'error');
-    }
-}
-
-async function deletePopUpLocation(locId) {
-    if (!confirm('Delete this pop-up location?')) return;
-    try {
-        const response = await fetch(`/api/popup-locations/${locId}`, { method: 'DELETE' });
-        const data = await response.json();
-        if (data.success) {
-            showToast('Location deleted');
-            loadPopUpLocations();
-        } else {
-            showToast(data.error || 'Failed to delete', 'error');
-        }
-    } catch (error) {
-        showToast('Error deleting location', 'error');
-    }
-}
-
-// =============================================================================
 // App C² - Square Config & Stats
 // =============================================================================
 
@@ -2454,27 +2291,49 @@ async function loadDeviceList() {
     try {
         const resp = await fetch('/api/devices');
         const devices = await resp.json();
-        const tbody = document.getElementById('devicesTableBody');
-        if (!tbody) return;
-        if (!Array.isArray(devices) || devices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">No devices registered</td></tr>';
-            return;
+
+        // Render mini version for compact panel
+        const miniContainer = document.getElementById('devicesMini');
+        if (miniContainer) {
+            if (!Array.isArray(devices) || devices.length === 0) {
+                miniContainer.innerHTML = '<div class="mini-empty"><i class="fas fa-mobile-alt"></i>No devices</div>';
+            } else {
+                miniContainer.innerHTML = devices.slice(0, 8).map(d => {
+                    const platform = d.platform || 'ios';
+                    const icon = platform === 'android' ? 'fa-android' : 'fa-apple';
+                    const lastSeen = d.last_seen ? new Date(d.last_seen) : null;
+                    const timeAgo = lastSeen ? getTimeAgo(lastSeen) : '';
+
+                    // Build device info string
+                    const infoParts = [];
+                    if (d.device_model) infoParts.push(d.device_model);
+                    if (d.os_version) infoParts.push(platform === 'ios' ? `iOS ${d.os_version}` : `Android ${d.os_version}`);
+                    if (d.app_version) infoParts.push(`v${d.app_version}`);
+                    const infoStr = infoParts.length > 0 ? infoParts.join(' · ') : '';
+
+                    return `<div class="mini-device">
+                        <i class="fab ${icon}"></i>
+                        <div class="mini-device-info">
+                            <span class="mini-device-name">${escapeHtml(d.device_name || 'Unknown')}</span>
+                            ${infoStr ? `<span class="mini-device-meta">${escapeHtml(infoStr)}</span>` : ''}
+                        </div>
+                        <span class="mini-device-time">${timeAgo}</span>
+                    </div>`;
+                }).join('');
+            }
         }
-        tbody.innerHTML = devices.map(d => {
-            const lastSeen = d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never';
-            const status = d.is_active
-                ? '<span class="cc-status active">Active</span>'
-                : '<span class="cc-status">Inactive</span>';
-            return `<tr>
-                <td>${d.device_name || 'Unknown'}</td>
-                <td>${d.platform || 'ios'}</td>
-                <td><code>${d.token_preview}</code></td>
-                <td>${lastSeen}</td>
-                <td>${status}</td>
-                <td><button class="btn btn-sm btn-danger" onclick="deleteDevice(${d.id})" title="Remove"><i class="fas fa-times"></i></button></td>
-            </tr>`;
-        }).join('');
     } catch (e) {}
+}
+
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
 }
 
 async function resetAllDevices() {
@@ -2581,36 +2440,24 @@ async function loadAnnouncements() {
 }
 
 function renderAnnouncementsTable(announcements) {
-    const tbody = document.getElementById('announcementsTableBody');
-    const empty = document.getElementById('announcementsEmpty');
-    if (!tbody) return;
-
-    if (announcements.length === 0) {
-        tbody.innerHTML = '';
-        if (empty) empty.style.display = 'flex';
-        return;
+    // Render mini version for compact panel
+    const miniContainer = document.getElementById('announcementsMini');
+    if (miniContainer) {
+        if (announcements.length === 0) {
+            miniContainer.innerHTML = '<div class="mini-empty"><i class="fas fa-bullhorn"></i>No announcements</div>';
+        } else {
+            miniContainer.innerHTML = announcements.slice(0, 5).map(ann => {
+                const statusClass = ann.is_active ? 'active' : 'inactive';
+                return `<div class="mini-item">
+                    <span class="mini-item-title">${escapeHtml(ann.title)}</span>
+                    <span class="mini-status ${statusClass}">${ann.is_active ? 'Live' : 'Off'}</span>
+                    <div class="mini-item-actions">
+                        <button class="delete" onclick="deleteAnnouncement(${ann.id})"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
     }
-    if (empty) empty.style.display = 'none';
-
-    tbody.innerHTML = announcements.map(ann => {
-        const created = new Date(ann.created_at);
-        const statusClass = ann.is_active ? 'active' : 'inactive';
-        const statusText = ann.is_active ? 'Active' : 'Inactive';
-        const toggleBtn = ann.is_active
-            ? `<button class="btn btn-sm btn-icon" onclick="deactivateAnnouncement(${ann.id})" title="Deactivate"><i class="fas fa-eye-slash"></i></button>`
-            : `<button class="btn btn-sm btn-icon" onclick="activateAnnouncement(${ann.id})" title="Activate"><i class="fas fa-eye"></i></button>`;
-
-        return `<tr>
-            <td><strong>${escapeHtml(ann.title)}</strong></td>
-            <td>${escapeHtml(ann.message).substring(0, 80)}${ann.message.length > 80 ? '...' : ''}</td>
-            <td>${created.toLocaleDateString()} ${created.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
-            <td>
-                ${toggleBtn}
-                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deleteAnnouncement(${ann.id})" title="Delete"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    }).join('');
 }
 
 function showAnnouncementModal() {
@@ -2718,47 +2565,31 @@ async function loadEvents() {
 }
 
 function renderEventsTable(events) {
-    const tbody = document.getElementById('eventsTableBody');
-    const empty = document.getElementById('eventsEmpty');
-    if (!tbody) return;
-
-    if (events.length === 0) {
-        tbody.innerHTML = '';
-        if (empty) empty.style.display = 'flex';
-        return;
-    }
-    if (empty) empty.style.display = 'none';
-
-    tbody.innerHTML = events.map(evt => {
-        const startDate = new Date(evt.start_date);
-        const endDate = evt.end_date ? new Date(evt.end_date) : null;
-        const now = new Date();
-        const isPast = startDate < now;
-        const statusClass = !evt.is_active ? 'inactive' : isPast ? 'expired' : 'active';
-        const statusText = !evt.is_active ? 'Inactive' : isPast ? 'Past' : 'Upcoming';
-
-        const startStr = `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-        const endStr = endDate ? `${endDate.toLocaleDateString()} ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : '--';
-
-        // Show recurrence indicator
-        let recurrenceLabel = '';
-        if (evt.is_recurring && evt.recurrence_rule) {
-            const ruleLabels = { 'weekly': 'Weekly', 'biweekly': 'Bi-weekly', 'monthly': 'Monthly' };
-            recurrenceLabel = `<span class="cc-badge recurrence" title="Recurring"><i class="fas fa-redo"></i> ${ruleLabels[evt.recurrence_rule] || evt.recurrence_rule}</span>`;
+    // Render mini version for compact panel
+    const miniContainer = document.getElementById('eventsMini');
+    if (miniContainer) {
+        if (events.length === 0) {
+            miniContainer.innerHTML = '<div class="mini-empty"><i class="fas fa-calendar"></i>No events</div>';
+        } else {
+            miniContainer.innerHTML = events.slice(0, 5).map(evt => {
+                const startDate = new Date(evt.start_date);
+                const now = new Date();
+                const isPast = startDate < now;
+                const dateStr = startDate.toLocaleDateString([], {month: 'short', day: 'numeric'});
+                const isPopup = evt.is_popup !== false;
+                const typeIcon = isPopup ? '<i class="fas fa-store" title="Pop-Up Market"></i>' : '<i class="fas fa-calendar-check" title="Calendar Only"></i>';
+                return `<div class="mini-item">
+                    <span class="mini-item-icon ${isPopup ? 'popup' : 'calendar'}">${typeIcon}</span>
+                    <span class="mini-item-title">${escapeHtml(evt.title)}</span>
+                    <span class="mini-item-meta">${dateStr}</span>
+                    <div class="mini-item-actions">
+                        <button class="edit" onclick="editEvent(${evt.id})"><i class="fas fa-edit"></i></button>
+                        <button class="delete" onclick="deleteEvent(${evt.id})"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
         }
-
-        return `<tr>
-            <td><strong>${escapeHtml(evt.title)}</strong> ${recurrenceLabel}</td>
-            <td>${escapeHtml(evt.location || '--')}</td>
-            <td>${startStr}</td>
-            <td>${endStr}</td>
-            <td><span class="cc-status ${statusClass}">${statusText}</span></td>
-            <td>
-                <button class="btn btn-sm btn-icon" onclick="editEvent(${evt.id})" title="Edit"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-icon btn-danger-icon" onclick="deleteEvent(${evt.id})" title="Delete"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    }).join('');
+    }
 }
 
 function showEventModal(eventId = null) {
@@ -2770,11 +2601,22 @@ function showEventModal(eventId = null) {
     document.getElementById('eventLongitude').value = '';
     document.getElementById('eventIcon').value = 'leaf.fill';
     document.getElementById('eventActive').checked = true;
+    document.getElementById('eventPopup').checked = true;
     document.getElementById('eventRecurring').checked = false;
+    document.getElementById('eventNotify').checked = true;
     document.getElementById('eventRecurrenceRule').value = 'weekly';
     document.getElementById('eventRecurrenceEndDate').value = '';
     toggleRecurrenceOptions();
     clearEventGeocodeStatus();
+    // Reset toggle labels
+    document.querySelectorAll('#eventModal .toggle-status').forEach(el => {
+        const checkbox = el.closest('.toggle-with-label')?.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            el.textContent = checkbox.checked ? 'On' : 'Off';
+            el.classList.toggle('on', checkbox.checked);
+            el.classList.toggle('off', !checkbox.checked);
+        }
+    });
 
     // Default start date to now, end date to now + 4 hours
     const now = new Date();
@@ -2811,7 +2653,9 @@ async function editEvent(eventId) {
         document.getElementById('eventLongitude').value = evt.longitude || '';
         document.getElementById('eventIcon').value = evt.icon || 'leaf.fill';
         document.getElementById('eventActive').checked = evt.is_active;
+        document.getElementById('eventPopup').checked = evt.is_popup !== false;
         document.getElementById('eventRecurring').checked = evt.is_recurring || false;
+        document.getElementById('eventNotify').checked = evt.notify !== false;
         document.getElementById('eventRecurrenceRule').value = evt.recurrence_rule || 'weekly';
         if (evt.recurrence_end_date) {
             document.getElementById('eventRecurrenceEndDate').value = toLocalISOString(new Date(evt.recurrence_end_date));
@@ -2820,6 +2664,15 @@ async function editEvent(eventId) {
         }
         toggleRecurrenceOptions();
         clearEventGeocodeStatus();
+        // Update toggle labels
+        document.querySelectorAll('#eventModal .toggle-status').forEach(el => {
+            const checkbox = el.closest('.toggle-with-label')?.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                el.textContent = checkbox.checked ? 'On' : 'Off';
+                el.classList.toggle('on', checkbox.checked);
+                el.classList.toggle('off', !checkbox.checked);
+            }
+        });
 
         if (evt.start_date) document.getElementById('eventStartDate').value = toLocalISOString(new Date(evt.start_date));
         if (evt.end_date) document.getElementById('eventEndDate').value = toLocalISOString(new Date(evt.end_date));
@@ -2891,6 +2744,7 @@ async function saveEvent(event) {
     event.preventDefault();
     const eventId = document.getElementById('eventId').value;
     const isRecurring = document.getElementById('eventRecurring').checked;
+    const isPopup = document.getElementById('eventPopup').checked;
     const data = {
         title: document.getElementById('eventTitle').value,
         description: document.getElementById('eventDescription').value,
@@ -2901,6 +2755,8 @@ async function saveEvent(event) {
         end_date: document.getElementById('eventEndDate').value || null,
         icon: document.getElementById('eventIcon').value,
         is_active: document.getElementById('eventActive').checked,
+        is_popup: isPopup,
+        notify: isPopup ? document.getElementById('eventNotify').checked : false,  // No notifications for calendar-only events
         is_recurring: isRecurring,
         recurrence_rule: isRecurring ? document.getElementById('eventRecurrenceRule').value : null,
         recurrence_end_date: isRecurring ? (document.getElementById('eventRecurrenceEndDate').value || null) : null
