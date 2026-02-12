@@ -3026,7 +3026,8 @@ def create_or_update_event():
     event.icon = data.get('icon', 'leaf.fill')
     event.is_active = data.get('is_active', True)
     event.is_popup = data.get('is_popup', False)  # True = Pop-Up Market (home screen + notifications), False = regular event (calendar/map only)
-    event.notify = data.get('notify', True)
+    # Regular events never get notifications — only pop-up markets do
+    event.notify = data.get('notify', True) if event.is_popup else False
     event.is_recurring = data.get('is_recurring', False)
     event.recurrence_rule = data.get('recurrence_rule', '') if data.get('is_recurring') else None
     # Reset notification flags if date changed
@@ -3102,9 +3103,11 @@ def check_and_send_event_notifications():
     now_utc = datetime.utcnow()
     now_eastern = datetime.now(eastern)
 
-    # Get all active events with notifications enabled that haven't ended yet
+    # Get all active pop-up events with notifications enabled that haven't ended yet
+    # Only pop-up markets get automated push notifications; regular events are calendar/map only
     events = Event.query.filter(
         Event.is_active == True,
+        Event.is_popup == True,
         Event.notify == True,
         Event.start_date >= now_utc - timedelta(hours=1)  # Include events that just started
     ).all()
