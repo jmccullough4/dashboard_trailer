@@ -913,12 +913,12 @@
                             <label class="form-label">Pop-Up Market</label>
                             <div class="toggle-with-label" style="margin-top: 8px;">
                                 <label class="switch">
-                                    <input type="checkbox" id="eventPopup" checked onchange="updateToggleLabel(this)">
+                                    <input type="checkbox" id="eventPopup" onchange="updateToggleLabel(this); toggleNotifyOption()">
                                     <span class="slider"></span>
                                 </label>
-                                <span class="toggle-status on">On</span>
+                                <span class="toggle-status off">Off</span>
                             </div>
-                            <small class="form-hint">On = Shows in app, Off = Calendar only</small>
+                            <small class="form-hint">On = Home screen + notifications, Off = Calendar/map only</small>
                         </div>
                     </div>
                     <div class="form-row">
@@ -945,15 +945,15 @@
                             <input type="datetime-local" id="eventRecurrenceEndDate" class="form-input">
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-row" id="notifyGroup" style="display: none;">
                         <div class="form-group">
                             <label class="form-label">Auto Notifications</label>
                             <div class="toggle-with-label" style="margin-top: 8px;">
                                 <label class="switch">
-                                    <input type="checkbox" id="eventNotify" checked onchange="updateToggleLabel(this)">
+                                    <input type="checkbox" id="eventNotify" onchange="updateToggleLabel(this)">
                                     <span class="slider"></span>
                                 </label>
-                                <span class="toggle-status on">On</span>
+                                <span class="toggle-status off">Off</span>
                             </div>
                             <small class="form-hint">Sends reminders at 7AM day-of and 1 hour before</small>
                         </div>

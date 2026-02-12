@@ -385,7 +385,7 @@ class Event(db.Model):
     recurrence_rule = db.Column(db.String(50))  # 'weekly', 'biweekly', 'monthly'
     recurrence_end_date = db.Column(db.DateTime)  # When to stop generating instances
     is_active = db.Column(db.Boolean, default=True)
-    is_popup = db.Column(db.Boolean, default=True)  # True = pop-up market (show in app), False = internal calendar only
+    is_popup = db.Column(db.Boolean, default=False)  # True = Pop-Up Market (home screen + notifications), False = Regular event (calendar/map only)
     notify = db.Column(db.Boolean, default=True)  # Send automated notifications
     notified_morning = db.Column(db.Boolean, default=False)  # Has 7AM notification been sent
     notified_hour_before = db.Column(db.Boolean, default=False)  # Has 1hr before notification been sent
@@ -407,7 +407,7 @@ class Event(db.Model):
             'recurrence_rule': self.recurrence_rule,
             'recurrence_end_date': self.recurrence_end_date.isoformat() if self.recurrence_end_date else None,
             'is_active': self.is_active,
-            'is_popup': self.is_popup if self.is_popup is not None else True,
+            'is_popup': self.is_popup if self.is_popup is not None else False,
             'notify': self.notify if self.notify is not None else True,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -2589,14 +2589,15 @@ def public_catalog():
 
 @app.route('/api/public/events', methods=['GET'])
 def public_events():
-    """Return active pop-up events for the mobile app, expanding recurring events.
+    """Return active events for the mobile app, expanding recurring events.
 
-    Only returns events where is_popup=True (pop-up markets visible to app users).
-    Internal calendar events (is_popup=False) are not returned.
+    Returns ALL active events for calendar and map display.
+    Events with is_popup=True are Pop-Up Markets (shown on home screen + notifications).
+    Events with is_popup=False are regular events (calendar/map only).
     Past events (where end_date or start_date has passed) are filtered out.
     """
-    # Only return pop-up events (is_popup=True) that are active
-    events = Event.query.filter_by(is_active=True, is_popup=True).order_by(Event.start_date.asc()).all()
+    # Return all active events (both pop-up markets and regular events)
+    events = Event.query.filter_by(is_active=True).order_by(Event.start_date.asc()).all()
 
     # Expand recurring events into instances
     all_instances = []
@@ -2620,13 +2621,14 @@ def public_events():
     return jsonify(all_instances)
 
 
-@app.route('/api/public/pop-up-sales', methods=['GET'])
-def public_pop_up_sales():
-    """Return upcoming pop-up sales for the mobile app (iOS field mapping).
+@app.route('/api/public/pop-up-markets', methods=['GET'])
+def public_pop_up_markets():
+    """Return upcoming Pop-Up Markets for the mobile app home screen.
 
-    DEPRECATED: Use /api/public/events instead. This endpoint now returns pop-up events.
+    Only returns events where is_popup=True (Pop-Up Markets for home screen display).
+    Regular events (is_popup=False) are not returned - they're only shown in calendar/map.
     """
-    # Only return pop-up events
+    # Only return Pop-Up Markets (is_popup=True)
     events = Event.query.filter_by(is_active=True, is_popup=True).filter(
         Event.start_date >= datetime.utcnow()
     ).order_by(Event.start_date.asc()).all()
@@ -3023,7 +3025,7 @@ def create_or_update_event():
     event.location = data.get('location', '')
     event.icon = data.get('icon', 'leaf.fill')
     event.is_active = data.get('is_active', True)
-    event.is_popup = data.get('is_popup', True)  # True = pop-up market (visible in app), False = calendar only
+    event.is_popup = data.get('is_popup', False)  # True = Pop-Up Market (home screen + notifications), False = regular event (calendar/map only)
     event.notify = data.get('notify', True)
     event.is_recurring = data.get('is_recurring', False)
     event.recurrence_rule = data.get('recurrence_rule', '') if data.get('is_recurring') else None
@@ -3431,8 +3433,8 @@ def migrate_db():
                 'is_recurring': 'BOOLEAN',
                 'recurrence_rule': 'VARCHAR(50)',
                 'recurrence_end_date': 'DATETIME',
-                'is_popup': 'BOOLEAN DEFAULT 1',
-                'notify': 'BOOLEAN DEFAULT 1',
+                'is_popup': 'BOOLEAN DEFAULT 0',
+                'notify': 'BOOLEAN DEFAULT 0',
                 'notified_morning': 'BOOLEAN DEFAULT 0',
                 'notified_hour_before': 'BOOLEAN DEFAULT 0'
             }

@@ -2576,8 +2576,8 @@ function renderEventsTable(events) {
                 const now = new Date();
                 const isPast = startDate < now;
                 const dateStr = startDate.toLocaleDateString([], {month: 'short', day: 'numeric'});
-                const isPopup = evt.is_popup !== false;
-                const typeIcon = isPopup ? '<i class="fas fa-store" title="Pop-Up Market"></i>' : '<i class="fas fa-calendar-check" title="Calendar Only"></i>';
+                const isPopup = evt.is_popup === true;
+                const typeIcon = isPopup ? '<i class="fas fa-truck" title="Pop-Up Market (Home + Calendar + Notifications)"></i>' : '<i class="fas fa-calendar-alt" title="Regular Event (Calendar/Map Only)"></i>';
                 return `<div class="mini-item">
                     <span class="mini-item-icon ${isPopup ? 'popup' : 'calendar'}">${typeIcon}</span>
                     <span class="mini-item-title">${escapeHtml(evt.title)}</span>
@@ -2601,12 +2601,13 @@ function showEventModal(eventId = null) {
     document.getElementById('eventLongitude').value = '';
     document.getElementById('eventIcon').value = 'leaf.fill';
     document.getElementById('eventActive').checked = true;
-    document.getElementById('eventPopup').checked = true;
+    document.getElementById('eventPopup').checked = false;  // Default to regular event (calendar/map only)
     document.getElementById('eventRecurring').checked = false;
-    document.getElementById('eventNotify').checked = true;
+    document.getElementById('eventNotify').checked = false;  // No notifications for regular events by default
     document.getElementById('eventRecurrenceRule').value = 'weekly';
     document.getElementById('eventRecurrenceEndDate').value = '';
     toggleRecurrenceOptions();
+    toggleNotifyOption();
     clearEventGeocodeStatus();
     // Reset toggle labels
     document.querySelectorAll('#eventModal .toggle-status').forEach(el => {
@@ -2634,6 +2635,21 @@ function toggleRecurrenceOptions() {
     document.getElementById('recurrenceEndGroup').style.display = isRecurring ? 'block' : 'none';
 }
 
+function toggleNotifyOption() {
+    const isPopup = document.getElementById('eventPopup').checked;
+    document.getElementById('notifyGroup').style.display = isPopup ? 'block' : 'none';
+    // Default notify to ON when popup is enabled
+    if (isPopup) {
+        document.getElementById('eventNotify').checked = true;
+        const statusEl = document.querySelector('#notifyGroup .toggle-status');
+        if (statusEl) {
+            statusEl.textContent = 'On';
+            statusEl.classList.remove('off');
+            statusEl.classList.add('on');
+        }
+    }
+}
+
 function closeEventModal() {
     document.getElementById('eventModal').classList.remove('show');
 }
@@ -2653,9 +2669,9 @@ async function editEvent(eventId) {
         document.getElementById('eventLongitude').value = evt.longitude || '';
         document.getElementById('eventIcon').value = evt.icon || 'leaf.fill';
         document.getElementById('eventActive').checked = evt.is_active;
-        document.getElementById('eventPopup').checked = evt.is_popup !== false;
+        document.getElementById('eventPopup').checked = evt.is_popup === true;
         document.getElementById('eventRecurring').checked = evt.is_recurring || false;
-        document.getElementById('eventNotify').checked = evt.notify !== false;
+        document.getElementById('eventNotify').checked = evt.notify === true;
         document.getElementById('eventRecurrenceRule').value = evt.recurrence_rule || 'weekly';
         if (evt.recurrence_end_date) {
             document.getElementById('eventRecurrenceEndDate').value = toLocalISOString(new Date(evt.recurrence_end_date));
@@ -2663,6 +2679,7 @@ async function editEvent(eventId) {
             document.getElementById('eventRecurrenceEndDate').value = '';
         }
         toggleRecurrenceOptions();
+        toggleNotifyOption();
         clearEventGeocodeStatus();
         // Update toggle labels
         document.querySelectorAll('#eventModal .toggle-status').forEach(el => {
