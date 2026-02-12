@@ -2623,15 +2623,17 @@ def public_events():
 
 @app.route('/api/public/pop-up-markets', methods=['GET'])
 def public_pop_up_markets():
-    """Return upcoming Pop-Up Markets for the mobile app home screen.
+    """Return active Pop-Up Markets for the mobile app home screen.
 
     Only returns events where is_popup=True (Pop-Up Markets for home screen display).
     Regular events (is_popup=False) are not returned - they're only shown in calendar/map.
+    Shows pop-up markets for the full duration of the event (until end_date, or start_date if no end).
     """
-    # Only return Pop-Up Markets (is_popup=True)
-    events = Event.query.filter_by(is_active=True, is_popup=True).filter(
-        Event.start_date >= datetime.utcnow()
-    ).order_by(Event.start_date.asc()).all()
+    now = datetime.utcnow()
+    # Only return Pop-Up Markets that haven't ended yet
+    # Use end_date if available, otherwise fall back to start_date
+    all_popups = Event.query.filter_by(is_active=True, is_popup=True).order_by(Event.start_date.asc()).all()
+    events = [e for e in all_popups if (e.end_date or e.start_date) >= now]
     return jsonify([{
         'id': e.id,
         'title': e.title,
