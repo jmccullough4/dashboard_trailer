@@ -2607,7 +2607,6 @@ function showEventModal(eventId = null) {
     document.getElementById('eventRecurrenceRule').value = 'weekly';
     document.getElementById('eventRecurrenceEndDate').value = '';
     toggleRecurrenceOptions();
-    toggleNotifyOption();
     clearEventGeocodeStatus();
     // Reset toggle labels
     document.querySelectorAll('#eventModal .toggle-status').forEach(el => {
@@ -2633,21 +2632,6 @@ function toggleRecurrenceOptions() {
     const isRecurring = document.getElementById('eventRecurring').checked;
     document.getElementById('recurrenceRuleGroup').style.display = isRecurring ? 'block' : 'none';
     document.getElementById('recurrenceEndGroup').style.display = isRecurring ? 'block' : 'none';
-}
-
-function toggleNotifyOption() {
-    const isPopup = document.getElementById('eventPopup').checked;
-    document.getElementById('notifyGroup').style.display = isPopup ? 'block' : 'none';
-    // Default notify to ON when popup is enabled
-    if (isPopup) {
-        document.getElementById('eventNotify').checked = true;
-        const statusEl = document.querySelector('#notifyGroup .toggle-status');
-        if (statusEl) {
-            statusEl.textContent = 'On';
-            statusEl.classList.remove('off');
-            statusEl.classList.add('on');
-        }
-    }
 }
 
 function closeEventModal() {
@@ -2679,7 +2663,6 @@ async function editEvent(eventId) {
             document.getElementById('eventRecurrenceEndDate').value = '';
         }
         toggleRecurrenceOptions();
-        toggleNotifyOption();
         clearEventGeocodeStatus();
         // Update toggle labels
         document.querySelectorAll('#eventModal .toggle-status').forEach(el => {
