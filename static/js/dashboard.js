@@ -2200,8 +2200,8 @@ async function saveFlashSale(event) {
         weight_lbs: parseFloat(document.getElementById('flashSaleWeight').value),
         original_price: parseFloat(document.getElementById('flashSaleOrigPrice').value),
         sale_price: parseFloat(document.getElementById('flashSaleSalePrice').value),
-        starts_at: document.getElementById('flashSaleStartsAt').value,
-        expires_at: document.getElementById('flashSaleExpiresAt').value,
+        starts_at: localInputToUTC(document.getElementById('flashSaleStartsAt').value),
+        expires_at: localInputToUTC(document.getElementById('flashSaleExpiresAt').value),
         image_system_name: document.getElementById('flashSaleIcon').value,
         is_active: document.getElementById('flashSaleActive').checked
     };
@@ -2798,19 +2798,58 @@ async function deleteEvent(eventId) {
     }
 }
 
-// Helper: convert Date to local datetime-local input value
+// Helper: convert Date to Eastern Time datetime-local input value
 function toLocalISOString(date) {
-    const offset = date.getTimezoneOffset();
-    const local = new Date(date.getTime() - offset * 60 * 1000);
-    return local.toISOString().slice(0, 16);
+    // Format date in Eastern Time (handles EST/EDT automatically)
+    const eastern = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const year = eastern.getFullYear();
+    const month = String(eastern.getMonth() + 1).padStart(2, '0');
+    const day = String(eastern.getDate()).padStart(2, '0');
+    const hours = String(eastern.getHours()).padStart(2, '0');
+    const minutes = String(eastern.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-// Helper: convert local datetime-local input value to UTC ISO string
+// Helper: convert Eastern Time datetime-local input value to UTC ISO string
 function localInputToUTC(localDateTimeStr) {
     if (!localDateTimeStr) return null;
-    // datetime-local gives us "YYYY-MM-DDTHH:MM" in local time
-    // Create a Date object (JS interprets this as local time)
-    const localDate = new Date(localDateTimeStr);
-    // Return as UTC ISO string
-    return localDate.toISOString();
+    // datetime-local gives us "YYYY-MM-DDTHH:MM" which we interpret as Eastern Time
+    // Parse the components
+    const [datePart, timePart] = localDateTimeStr.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+
+    // Use iterative approach to find correct UTC time for given Eastern time
+    // Start with an initial guess assuming EST (UTC-5)
+    let utcMs = Date.UTC(year, month - 1, day, hours + 5, minutes);
+
+    // Format the guess in Eastern time and compare
+    for (let i = 0; i < 2; i++) {
+        const testDate = new Date(utcMs);
+        const easternStr = testDate.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+            hour12: false
+        });
+        // Parse the Eastern time we got: "MM/DD/YYYY, HH:MM"
+        const match = easternStr.match(/(\d+)\/(\d+)\/(\d+),\s*(\d+):(\d+)/);
+        if (match) {
+            const [, m, d, y, h, min] = match.map(Number);
+            // Calculate difference between target Eastern time and what we got
+            const targetMinutes = hours * 60 + minutes;
+            const gotMinutes = h * 60 + min;
+            const diffMinutes = targetMinutes - gotMinutes;
+
+            // Also check if dates differ
+            const targetDay = day;
+            const gotDay = d;
+            const dayDiff = targetDay - gotDay;
+
+            // Adjust by the difference
+            utcMs += (diffMinutes + dayDiff * 24 * 60) * 60 * 1000;
+        }
+    }
+
+    return new Date(utcMs).toISOString();
 }
